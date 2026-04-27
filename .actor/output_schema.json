@@ -1,0 +1,11 @@
+{
+    "actorOutputSchemaVersion": 1,
+    "title": "LinkedIn Jobs Scraper results",
+    "properties": {
+        "results": {
+            "type": "string",
+            "title": "Scraped listings",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
+        }
+    }
+}

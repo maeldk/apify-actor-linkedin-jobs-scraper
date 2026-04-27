@@ -1,0 +1,49 @@
+version: 1
+
+audience: recruiter_data
+families: [jobs]
+domains:
+  primary: linkedin.com
+  region: Global
+markets: 1
+
+keyFeatures:
+  - incremental
+  - change-classification
+  - notifications
+  - id: multi-region-presets
+    emoji: 🌎
+    title: Multi-region with presets
+    body: |
+      Pass `regions: ["US", "GB", "DE"]` for a custom country mix, or pick
+      a preset like `"nordic"` / `"dach"` / `"benelux"` / `"uk-ireland"` /
+      `"eu-27"` / `"gcc"` / `"mena"` / `"asean"` / `"latam"` /
+      `"anglosphere"` for ready-made country groupings. One run, multiple
+      regions, source country preserved on every record.
+  - id: recruiter-spam-filter
+    body: |
+      `removeAgency: true` runs a heuristic post-filter on company names
+      (matching "recruitment", "staffing", etc.) and drops listings from
+      3rd-party agencies — keep only direct-employer postings.
+  - id: easy-apply
+    emoji: ⚡
+    title: Easy-Apply filter
+    body: |
+      `easyApply: true` returns only LinkedIn Easy-Apply postings — useful
+      for outreach lists targeting roles that don't redirect to external
+      ATS systems.
+  - id: company-filtering
+    emoji: 🏢
+    title: Company-level filtering
+    body: |
+      `companies: [123, 456]` filters at the LinkedIn API level (numeric
+      `companyId`), or pass case-insensitive name substrings via
+      `excludeCompanies` to drop staffing brands. Combine with
+      `excludeKeywords` to scrub spam-prone titles.
+  - paste-mode
+  - detail-enrichment
+  - contact-extraction
+  - salary-data
+  - compact
+  - description-truncation
+  - structured-export

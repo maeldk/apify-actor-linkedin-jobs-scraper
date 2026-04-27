@@ -1,0 +1,48 @@
+{
+    "actorSpecification": 1,
+    "views": {
+        "overview": {
+            "title": "Overview",
+            "transformation": {
+                "fields": [
+                    "title", "company", "location", "country",
+                    "postedAt", "applyUrl", "applyType",
+                    "workplaceType", "easyApply",
+                    "isPromoted", "changeType"
+                ]
+            },
+            "display": { "component": "table", "properties": {} }
+        },
+        "full": {
+            "title": "Full output",
+            "transformation": {
+                "fields": [
+                    "scrapedAt", "portalUrl",
+                    "jobId", "linkedinJobId",
+                    "title", "company", "companyUrl", "companyId",
+                    "location", "country", "postedAt",
+                    "jobUrl", "applyUrl", "applyType",
+                    "description", "descriptionMarkdown",
+                    "seniorityLevel", "employmentType", "industry", "jobFunction",
+                    "workplaceType", "applicantCount", "easyApply",
+                    "salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod", "salarySource", "salaryIsPredicted",
+                    "companyLogo", "companyDescription", "companyEmployeeCount", "companyWebsite", "companyAddress",
+                    "recruiterName", "recruiterUrl", "recruiterTitle",
+                    "extractedEmails", "extractedPhones", "extractedUrls", "socialProfiles",
+                    "changeType", "firstSeenAt", "lastSeenAt", "previousSeenAt", "expiredAt",
+                    "isRepost", "repostOfId", "repostDetectedAt",
+                    "source", "language", "contentHash",
+                    "isPromoted", "postingBenefits", "trackingId"
+                ]
+            },
+            "display": {
+                "component": "table",
+                "properties": {
+                    "isRepost": { "label": "Repost", "format": "text" },
+                    "repostOfId": { "label": "Repost of", "format": "text" },
+                    "repostDetectedAt": { "label": "Repost detected", "format": "text" }
+                }
+            }
+        }
+    }
+}

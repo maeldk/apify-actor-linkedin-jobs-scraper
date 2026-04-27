@@ -1,0 +1,408 @@
+{
+    "title": "LinkedIn Jobs Scraper",
+    "description": "Scrape LinkedIn job postings via the public guest API. Set 🔍 Keywords + 📍 Location (or 🌍 geoIds) to start. Use incrementalMode + stateKey for cross-run delta pricing — never charged for already-seen jobs.\n\nTo start, provide 🔗 Start URLs to scrape specific pages. Set 💯 Max Results to control volume (0 = unlimited).",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "keywords": {
+            "title": "🔍 Search keywords",
+            "description": "Job search keywords (e.g. \"software engineer\", \"nurse\"). Leave blank to browse all jobs in the selected location.",
+            "type": "string",
+            "editor": "textfield",
+            "prefill": "software engineer",
+            "sectionCaption": "Search"
+        },
+        "location": {
+            "title": "📍 Location",
+            "description": "Free-text location (e.g. \"Copenhagen, Denmark\", \"United States\"). Use geoIds for higher precision.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "geoIds": {
+            "title": "🌍 LinkedIn geoIds",
+            "description": "Numeric LinkedIn geoIds (e.g. \"103644278\" = United States). Each geoId becomes a separate query, deduped on jobId.",
+            "type": "array",
+            "editor": "stringList",
+            "default": []
+        },
+        "regions": {
+            "title": "🗺 ISO-2 region codes",
+            "description": "Two-letter country codes (e.g. \"US\", \"GB\", \"DE\"). Resolved to LinkedIn country geoIds. Use geoIds[] for unsupported markets.",
+            "type": "array",
+            "editor": "stringList",
+            "default": []
+        },
+        "regionPresets": {
+            "title": "🌐 Region preset",
+            "description": "Pre-defined country grouping. Combined with regions[] if both are set.",
+            "type": "string",
+            "editor": "select",
+            "enum": [
+                "nordic",
+                "dach",
+                "benelux",
+                "uk-ireland",
+                "eu-27",
+                "gcc",
+                "mena",
+                "asean",
+                "anglosphere",
+                "latam",
+                "nordics-extended"
+            ]
+        },
+        "datePosted": {
+            "title": "🗓 Date posted",
+            "description": "Filter by posting recency. \"lastHour\" is unique to this scraper.",
+            "type": "string",
+            "editor": "select",
+            "enum": [
+                "anytime",
+                "lastHour",
+                "last24h",
+                "last7d",
+                "last30d"
+            ],
+            "default": "anytime"
+        },
+        "jobType": {
+            "title": "💼 Job type",
+            "description": "Multi-select employment type filter.",
+            "type": "array",
+            "editor": "select",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "fulltime",
+                    "parttime",
+                    "contract",
+                    "temporary",
+                    "internship",
+                    "volunteer",
+                    "other"
+                ]
+            },
+            "default": []
+        },
+        "experienceLevel": {
+            "title": "📈 Experience level",
+            "description": "Multi-select seniority filter.",
+            "type": "array",
+            "editor": "select",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "internship",
+                    "entry",
+                    "associate",
+                    "mid_senior",
+                    "director",
+                    "executive"
+                ]
+            },
+            "default": []
+        },
+        "workType": {
+            "title": "🏠 Work type",
+            "description": "Multi-select onsite/remote/hybrid filter.",
+            "type": "array",
+            "editor": "select",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "onsite",
+                    "remote",
+                    "hybrid"
+                ]
+            },
+            "default": []
+        },
+        "salaryMin": {
+            "title": "💰 Salary min",
+            "description": "Minimum annual salary (USD). Mapped to LinkedIn's nearest f_SB2 bucket. Post-filtered exactly.",
+            "type": "integer",
+            "editor": "number",
+            "minimum": 0
+        },
+        "salaryMax": {
+            "title": "💰 Salary max",
+            "description": "Maximum annual salary. Post-filtered (LinkedIn has no native max filter).",
+            "type": "integer",
+            "editor": "number",
+            "minimum": 0
+        },
+        "salaryIncludeUnknown": {
+            "title": "Include jobs without salary",
+            "description": "When salaryMin/Max set, include jobs with no salary data.",
+            "type": "boolean",
+            "default": true
+        },
+        "companies": {
+            "title": "🏢 Company IDs to include",
+            "description": "Numeric LinkedIn companyIds (filter at API level).",
+            "type": "array",
+            "editor": "stringList",
+            "default": []
+        },
+        "excludeCompanies": {
+            "title": "🚫 Exclude companies",
+            "description": "Company-name substrings to exclude (case-insensitive post-filter).",
+            "type": "array",
+            "editor": "stringList",
+            "default": []
+        },
+        "excludeKeywords": {
+            "title": "🚫 Exclude keywords",
+            "description": "Title substrings to exclude (case-insensitive post-filter).",
+            "type": "array",
+            "editor": "stringList",
+            "default": []
+        },
+        "easyApply": {
+            "title": "⚡ Easy Apply only",
+            "description": "Restrict results to LinkedIn Easy Apply postings.",
+            "type": "boolean",
+            "default": false,
+            "prefill": false
+        },
+        "removeAgency": {
+            "title": "🚫 Remove staffing agencies",
+            "description": "Heuristic post-filter on company name (\"recruitment\", \"staffing\", etc.).",
+            "type": "boolean",
+            "default": false,
+            "prefill": false
+        },
+        "distance": {
+            "title": "📏 Distance (km/mi)",
+            "description": "Search radius around location. LinkedIn auto-detects unit (miles in US/UK/CA/AU/NZ; km elsewhere).",
+            "type": "integer",
+            "editor": "number",
+            "minimum": 0
+        },
+        "sortBy": {
+            "title": "📊 Sort",
+            "description": "Sort order. \"recent\" is recommended for incremental feeds.",
+            "type": "string",
+            "editor": "select",
+            "enum": [
+                "recent",
+                "relevant"
+            ],
+            "default": "recent"
+        },
+        "startUrls": {
+            "title": "🔗 Advanced: start URLs",
+            "description": "Direct LinkedIn job-search URLs. Supersedes structured query when set. Deferred to v0.5 — currently logged but not crawled.",
+            "type": "array",
+            "editor": "requestListSources",
+            "default": []
+        },
+        "proxyConfiguration": {
+            "title": "🛡 Proxy",
+            "description": "Network egress configuration. The default uses Apify Proxy with whatever group your plan has available — switch to residential if you observe blocks.",
+            "type": "object",
+            "editor": "proxy",
+            "default": {
+                "useApifyProxy": true
+            },
+            "sectionCaption": "Proxy"
+        },
+        "linkedinHost": {
+            "title": "🌐 LinkedIn host",
+            "description": "Subdomain (e.g. \"www\", \"de\"). Affects default geo-routing + UI labels.",
+            "type": "string",
+            "editor": "textfield",
+            "default": "www",
+            "sectionCaption": "Localization"
+        },
+        "outputLanguage": {
+            "title": "🗣 Accept-Language",
+            "description": "HTTP Accept-Language header. Default en-US for parsing-cleanliness.",
+            "type": "string",
+            "editor": "textfield",
+            "default": "en-US,en;q=0.9"
+        },
+        "incrementalMode": {
+            "title": "🔁 Incremental mode",
+            "description": "Persist seen-jobIds across runs; emit only NEW + UPDATED. Requires stateKey.",
+            "type": "boolean",
+            "default": false,
+            "prefill": false,
+            "sectionCaption": "Incremental & state"
+        },
+        "stateKey": {
+            "title": "🔑 State key",
+            "description": "Unique key for cross-run state. Required when incrementalMode=true.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "outputMode": {
+            "title": "📤 Output mode",
+            "description": "Which items to emit when in incrementalMode.",
+            "type": "string",
+            "editor": "select",
+            "enum": [
+                "all",
+                "new-only",
+                "changed-only"
+            ],
+            "default": "all"
+        },
+        "emitUnchanged": {
+            "title": "♻️ Emit UNCHANGED items",
+            "description": "Include items that haven't changed since last run.",
+            "type": "boolean",
+            "default": false
+        },
+        "emitExpired": {
+            "title": "⚰️ Emit EXPIRED items",
+            "description": "Include items that disappeared from search results.",
+            "type": "boolean",
+            "default": false
+        },
+        "skipReposts": {
+            "title": "Skip detected reposts",
+            "description": "Suppress jobs with the same content as a previously-seen but inactive listing.",
+            "type": "boolean",
+            "default": false
+        },
+        "enrichDetails": {
+            "title": "🔬 Enrich with detail page",
+            "description": "Fetch each job's detail page for full description, seniorityLevel, employmentType, jobFunction, industry, and applicantCount. Adds 1 HTTP request per job.",
+            "type": "boolean",
+            "default": false,
+            "prefill": false
+        },
+        "scopePerQuery": {
+            "title": "Scope state per query",
+            "description": "Reserved — currently no-op (state is per-stateKey).",
+            "type": "boolean",
+            "default": false,
+            "prefill": false
+        },
+        "discoverRelated": {
+            "title": "🔭 Expand via relatedJobs",
+            "description": "After the main SERP, fetch LinkedIn's relatedJobs feed for the first N results to discover jobs that don't surface on the keyword search. Useful for thin markets.",
+            "type": "boolean",
+            "default": false,
+            "prefill": false
+        },
+        "relatedSeedCount": {
+            "title": "relatedJobs seed count",
+            "description": "How many of the first SERP results are used as seeds for relatedJobs expansion. Each seed yields up to 10 candidates.",
+            "type": "integer",
+            "default": 5,
+            "minimum": 0,
+            "maximum": 100
+        },
+        "telegramToken": {
+            "title": "Telegram bot token",
+            "description": "Bot token from @BotFather. Leave empty to disable Telegram notifications.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true,
+            "sectionCaption": "Notifications"
+        },
+        "telegramChatId": {
+            "title": "💬 Telegram chat ID",
+            "description": "Numeric chat or channel ID where notifications should be sent.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "discordWebhookUrl": {
+            "title": "Discord webhook URL",
+            "description": "Channel webhook URL. Leave empty to disable Discord notifications.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "slackWebhookUrl": {
+            "title": "Slack webhook URL",
+            "description": "Incoming webhook URL. Leave empty to disable Slack notifications.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "whatsappAccessToken": {
+            "title": "WhatsApp Cloud API access token",
+            "description": "Permanent System User token from Meta Business.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "whatsappPhoneNumberId": {
+            "title": "WhatsApp phone-number ID",
+            "description": "Numeric phone-number ID from the Meta dashboard.",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "whatsappTo": {
+            "title": "WhatsApp recipient (E.164)",
+            "description": "Recipient phone number in E.164 format (e.g. \"4561234567\").",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "webhookUrl": {
+            "title": "Generic webhook URL (n8n / Make / Zapier)",
+            "description": "Receives a JSON POST of {metadata, items} for each batch.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "webhookHeaders": {
+            "title": "Webhook headers",
+            "description": "Additional HTTP headers to include with the generic webhook (e.g. Authorization).",
+            "type": "object",
+            "editor": "json"
+        },
+        "notificationLimit": {
+            "title": "Max items per notification batch",
+            "description": "Cap on items included in each notification message.",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 50
+        },
+        "notifyOnlyChanges": {
+            "title": "Notify only NEW/UPDATED",
+            "description": "When in incrementalMode, suppress notifications for UNCHANGED items.",
+            "type": "boolean",
+            "default": false
+        },
+        "compact": {
+            "title": "Compact output",
+            "description": "Emit only core fields (keeps cost the same; reduces dataset size).",
+            "type": "boolean",
+            "default": false,
+            "prefill": false,
+            "sectionCaption": "Output"
+        },
+        "descriptionMaxLength": {
+            "title": "Description max length",
+            "description": "Truncate description (0 = no truncation). Only relevant when enrichDetails=true.",
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+        },
+        "phoneExtractionMode": {
+            "title": "Phone-extraction mode",
+            "description": "\"strict\" requires Tel:/+CC prefix; \"lenient\" also picks up bare local-format numbers.",
+            "type": "string",
+            "editor": "select",
+            "enum": [
+                "strict",
+                "lenient"
+            ],
+            "default": "strict"
+        },
+        "maxResults": {
+            "title": "💯 Max results",
+            "description": "Cap on emitted items (0 = unlimited).",
+            "type": "integer",
+            "editor": "number",
+            "default": 100,
+            "minimum": 0
+        }
+    },
+    "required": []
+}

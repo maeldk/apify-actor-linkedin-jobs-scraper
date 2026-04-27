@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+storage/
+apify_storage/
+*.local
+.DS_Store
+.claude/
+verify-input.json

@@ -1,0 +1,26 @@
+{
+    "name": "linkedin-jobs-scraper",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "LinkedIn job scraper with cross-run delta pricing — pay only for new/changed listings.",
+    "main": "dist/main.js",
+    "engines": {
+        "node": ">=22 <24"
+    },
+    "scripts": {
+        "start": "node dist/main.js",
+        "build": "tsc",
+        "test": "vitest run",
+        "deploy": "node C:/Dev/Apify/_tools/pre-push-check.mjs . && apify push"
+    },
+    "dependencies": {
+        "apify": "^3.2.0",
+        "crawlee": "^3.11.0",
+        "undici": "^8.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "typescript": "~5.6.0",
+        "vitest": "^2.1.0"
+    }
+}

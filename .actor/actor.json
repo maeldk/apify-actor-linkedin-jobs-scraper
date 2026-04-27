@@ -1,0 +1,98 @@
+{
+    "actorSpecification": 1,
+    "name": "linkedin-jobs-scraper",
+    "title": "LinkedIn Jobs Scraper — Pay only for new or changed listings",
+    "description": "Scrape linkedin.com jobs with state-keyed delta pricing — recurring runs only charge for NEW or CHANGED listings; already-seen jobs are skipped automatically. Built-in Telegram/Discord/Slack/WhatsApp/webhook notifications.",
+    "version": "0.1",
+    "buildTag": "latest",
+    "readme": "../README.md",
+    "dockerfile": "../Dockerfile",
+    "input": "./input_schema.json",
+    "output": "./output_schema.json",
+    "storages": {
+        "dataset": "./dataset_schema.json"
+    },
+    "defaultRunOptions": {
+        "memoryMbytes": 256
+    },
+    "minMemoryMbytes": 256,
+    "maxMemoryMbytes": 1024,
+    "exampleRunInput": {
+        "body": {
+            "keywords": "software engineer",
+            "location": "United States",
+            "datePosted": "last24h",
+            "maxResults": 100
+        },
+        "contentType": "application/json"
+    },
+    "examples": [
+        {
+            "name": "Recent US software-engineer jobs",
+            "input": {
+                "keywords": "software engineer",
+                "geoIds": ["103644278"],
+                "datePosted": "last24h",
+                "maxResults": 100
+            }
+        },
+        {
+            "name": "Nordic preset, all engineering roles",
+            "input": {
+                "keywords": "engineer",
+                "regionPresets": "nordic",
+                "datePosted": "last7d",
+                "maxResults": 200
+            }
+        },
+        {
+            "name": "Daily delta feed (incremental)",
+            "input": {
+                "keywords": "software engineer",
+                "geoIds": ["103644278"],
+                "datePosted": "last24h",
+                "maxResults": 500,
+                "incrementalMode": true,
+                "stateKey": "us-software-engineer-daily"
+            }
+        },
+        {
+            "name": "Remote roles globally with detail enrichment",
+            "input": {
+                "keywords": "senior backend engineer",
+                "workType": ["remote"],
+                "datePosted": "last7d",
+                "enrichDetails": true,
+                "maxResults": 50
+            }
+        }
+    ],
+    "categories": [
+        "JOBS",
+        "LEAD_GENERATION",
+        "AUTOMATION"
+    ],
+    "pricingInfos": [
+        {
+            "pricingModel": "PAY_PER_EVENT",
+            "pricingPerEvent": {
+                "actorChargeEvents": {
+                    "apify-actor-start": {
+                        "eventTitle": "Actor Start",
+                        "eventDescription": "Charged when the Actor starts running.",
+                        "isOneTimeEvent": true,
+                        "eventPriceUsd": 0.0005
+                    },
+                    "apify-default-dataset-item": {
+                        "eventTitle": "Result",
+                        "eventDescription": "Single result in the default dataset. $1.00 per 1,000 jobs — pay only for fresh deltas in incremental mode.",
+                        "isOneTimeEvent": false,
+                        "eventPriceUsd": 0.001,
+                        "isPrimaryEvent": true
+                    }
+                }
+            },
+            "apifyMarginPercentage": 0.2
+        }
+    ]
+}

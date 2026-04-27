@@ -1,0 +1,4 @@
+{
+  "memProfile": "First deploy of new actor — no historical run data to profile yet. Will run memory-profile.mjs after first public run with real workload.",
+  "banner": "Cloudflare R2 banner uploads currently blocked by CF for new actors (see workspace memory feedback_no_readme_banners). Adding pictureUrl after R2 access is unblocked."
+}
