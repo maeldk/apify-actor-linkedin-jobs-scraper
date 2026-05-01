@@ -11,6 +11,7 @@ import {
     filterByEmissionPolicy, stateKvKey, detectRepostMatch,
 } from './incrementalState.js';
 import { lockKvKey, tryAcquire, verifyLock, type StateLock } from './stateLock.js';
+import { buildStateKey } from './buildStateKey.js';
 import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, type RunMetadata } from './notifications.js';
 import { logRunFooter } from './runFooter.js';
 import { resolveRegions } from './regionResolver.js';
@@ -223,8 +224,41 @@ async function main() {
   const rawInput = await Actor.getInput<Partial<Input>>();
   const input = normalizeInput(rawInput ?? {});
 
+  // Auto-derive stateKey when not explicitly set: fingerprint search inputs so
+
+
+  // multi-URL/multi-filter runs don't share state across unrelated universes.
+
+
   if (input.incrementalMode && !input.stateKey) {
-    throw await Actor.fail('stateKey is required when incrementalMode is true.');
+
+
+    input.stateKey = buildStateKey({
+
+
+      keyword: input.keywords || null,
+
+
+      location: input.location ?? null,
+
+
+        dimensions: {
+
+
+          startUrls: input.startUrls,
+
+
+        },
+
+
+  
+
+    });
+
+
+    log.info(`Auto-derived stateKey: ${input.stateKey}`);
+
+
   }
   if (!input.keywords && !input.geoIds.length && !input.regions.length && !input.regionPresets && !input.location && !input.startUrls.length) {
     throw await Actor.fail('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.');
@@ -563,6 +597,9 @@ function buildExpiredStub(
     companyLogo: null, companyDescription: null, companyEmployeeCount: null,
     companyWebsite: null, companyAddress: null,
     recruiterName: null, recruiterUrl: null, recruiterTitle: null,
+    contactEmail: null, contactPhone: null,
+    companyLinkedIn: null, companySocialLinks: null,
+    applyEmail: null,
     extractedEmails: [], extractedPhones: [], extractedUrls: [],
     socialProfiles: { linkedin: [], twitter: [], instagram: [], facebook: [], youtube: [], tiktok: [], github: [], xing: [] },
     changeType: 'EXPIRED',

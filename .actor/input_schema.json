@@ -199,7 +199,7 @@
         },
         "proxyConfiguration": {
             "title": "🛡 Proxy",
-            "description": "Network egress configuration. The default uses Apify Proxy with whatever group your plan has available — switch to residential if you observe blocks.",
+            "description": "Network egress configuration. The default auto-selects whatever group your plan has available — switch to residential if you observe blocks.",
             "type": "object",
             "editor": "proxy",
             "default": {
@@ -232,7 +232,7 @@
         },
         "stateKey": {
             "title": "🔑 State key",
-            "description": "Unique key for cross-run state. Required when incrementalMode=true.",
+            "description": "Optional stable identifier for the tracked search universe. Leave empty to auto-derive a stable identifier from your search inputs — different keyword/location/filter combinations get isolated state automatically.",
             "type": "string",
             "editor": "textfield"
         },
@@ -301,7 +301,7 @@
             "type": "string",
             "editor": "textfield",
             "isSecret": true,
-            "sectionCaption": "Notifications"
+            "sectionCaption": "🔔 Notifications"
         },
         "telegramChatId": {
             "title": "💬 Telegram chat ID",
