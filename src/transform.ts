@@ -7,12 +7,52 @@ import { createHash } from 'node:crypto';
 const PROFILE_HOST_RE = /^(?:[a-z]{2,3}\.)?linkedin\.com$/i;
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+/g;
+const PHONE_RE = /(?:\+?\d[\d\s().\-]{7,}\d)/g;
+const URL_RE = /https?:\/\/[^\s<>"'()]+/gi;
+const SOCIAL_HOST_RE = /(?:linkedin\.com|twitter\.com|x\.com|facebook\.com|instagram\.com|youtube\.com|tiktok\.com|github\.com|xing\.com)/i;
 const EMAIL_NOISE_DOMAINS = new Set([
   'sentry.io', 'wixpress.com', 'googletagmanager.com', 'google-analytics.com',
   'googleapis.com', 'cloudflare.com', 'facebook.com', 'twitter.com',
   'linkedin.com', 'example.com', 'test.com',
 ]);
 const EMAIL_NOISE_TLDS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'css', 'js']);
+
+export function extractPhones(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  for (const raw of text.match(PHONE_RE) ?? []) {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 15) continue;
+    out.add(raw.trim());
+  }
+  return [...out];
+}
+
+/** Extract first mailto: address from URL/href text (apply-redirect or description). */
+export function extractMailtoFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+)/i.exec(url);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** Normalize a LinkedIn company URL to canonical https://www.linkedin.com/company/{slug}/ form. */
+export function normalizeLinkedInCompanyUrl(companyUrl: string | null | undefined): string | null {
+  if (!companyUrl) return null;
+  const m = /\/company\/([^/?#]+)/i.exec(companyUrl);
+  if (!m) return null;
+  const slug = decodeURIComponent(m[1]).toLowerCase();
+  if (!slug) return null;
+  return `https://www.linkedin.com/company/${slug}/`;
+}
+
+export function extractSocialLinks(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  for (const raw of text.match(URL_RE) ?? []) {
+    if (SOCIAL_HOST_RE.test(raw)) out.add(raw.replace(/[).,;]+$/, ''));
+  }
+  return [...out];
+}
 
 export function extractEmails(text: string | null | undefined): string[] {
   if (!text) return [];
@@ -73,12 +113,28 @@ export function mergeDetail(item: OutputItem, detail: ParsedDetail): OutputItem 
   const description = detail.description ?? item.description;
   const descriptionHtml = detail.descriptionHtml ?? item.descriptionHtml;
   const emails = Array.from(new Set([...item.extractedEmails, ...extractEmails(description), ...extractEmails(descriptionHtml)]));
+  const phones = Array.from(new Set([...item.extractedPhones, ...extractPhones(description)]));
+  const socials = Array.from(new Set([...(item.companySocialLinks ?? []), ...extractSocialLinks(descriptionHtml)]));
+  // contactEmail / contactPhone are STRUCTURED-ONLY per FIELD_SEMANTICS.md.
+  // LinkedIn's guest API exposes ZERO structured recruiter contact — emails
+  // surfaced in description text are overwhelmingly EEO-compliance / HR-support
+  // boilerplate (probed 2026-05-01: 14% email coverage, all corporate
+  // boilerplate; 7% loose phone matches, mostly false positives).
+  // Bulk-extracted text data lives in extractedEmails / extractedPhones with
+  // no semantic claim. Customers wanting first-found-email should read
+  // extractedEmails[0] explicitly.
+  const contactEmail = item.contactEmail;
+  const contactPhone = item.contactPhone;
   return {
     ...item,
     description,
     descriptionHtml,
     descriptionMarkdown: descriptionToMarkdown(description),
     extractedEmails: emails,
+    extractedPhones: phones,
+    companySocialLinks: socials.length > 0 ? socials : item.companySocialLinks,
+    contactEmail,
+    contactPhone,
     seniorityLevel: detail.seniorityLevel ?? item.seniorityLevel,
     employmentType: detail.employmentType ?? item.employmentType,
     industry: detail.industry ?? item.industry,
@@ -181,6 +237,13 @@ export function transformJob(apiJob: ApiJob, scrapedAt: string): OutputItem {
     recruiterName: null,
     recruiterUrl: null,
     recruiterTitle: null,
+    contactEmail: null,
+    contactPhone: null,
+
+    companyLinkedIn: normalizeLinkedInCompanyUrl(apiJob.companyUrl),
+    companySocialLinks: null,
+
+    applyEmail: extractMailtoFromUrl(apiJob.jobUrl),
 
     extractedEmails: [],
     extractedPhones: [],

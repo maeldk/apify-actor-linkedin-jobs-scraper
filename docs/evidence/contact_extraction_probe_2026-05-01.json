@@ -1,0 +1,18 @@
+{
+  "probedAt": "2026-05-01",
+  "method": "Sample 50 unique LinkedIn job IDs across 5 keyword variations (recruiter / staffing agency / sales representative / small business / consultant) × 2 SERP shards. Fetch detail pages and inspect description-text + descriptionHtml for emails, phones, external URLs.",
+  "sampleSize": 44,
+  "results": {
+    "anyEmail": "6/44 (14%) — overwhelmingly corporate boilerplate (EEO compliance, accommodations, HR support)",
+    "anyPhone": "3/44 (7%) — most are false positives matching the loose phone regex (e.g. \"10389697\" is a 8-digit number, not a phone)",
+    "externalUrls": "2/44 (5%) — Amazon careers boilerplate links (amazon.jobs/benefits, amazon.jobs/accommodations)"
+  },
+  "exampleHits": [
+    "reasonableaccommodations@airbnb.com (Airbnb accommodations team — boilerplate, present on every Airbnb posting)",
+    "EEOCompliance@spacex.com (SpaceX EEO compliance officer — boilerplate, identical across all SpaceX postings)",
+    "na.hrsupport@popmart.com (POP MART HR support — generic, not recruiter-specific)"
+  ],
+  "structuredContact": "LinkedIn's jobs-guest API exposes ZERO structured recruiter contact fields. The detail HTML at /jobs-guest/jobs/api/jobPosting/<id> contains only the company-level salary, location, employment type, applicant count, seniority — no recruiter / hiring-manager fields.",
+  "conclusion": "contactEmail and contactPhone should be null for ~100% of LinkedIn jobs because the structured fields don't exist and description text-mining yields corporate boilerplate emails (not recruiter contact). Customers wanting first-found-email should read extractedEmails[0] explicitly.",
+  "actionTaken": "Removed `?? emails.find()` and `?? phones[0]` fallbacks in src/transform.ts:mergeDetail. Marked contactEmail + contactPhone as platform-limitation in _tools/fleet-baseline-score.mjs."
+}
