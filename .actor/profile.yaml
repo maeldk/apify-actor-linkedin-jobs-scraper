@@ -9,25 +9,35 @@ markets: 1
 
 keyFeatures:
   - incremental
-  - change-classification
   - notifications
+  - paste-mode
+  - id: recruiter-spam-filter
+    body: |
+      `removeAgency: true` runs a heuristic post-filter on company names
+      (matching "recruitment", "staffing", etc.) and drops listings from
+      3rd-party agencies — keep only direct-employer postings.
+  - detail-enrichment
+  - salary-data
   - id: multi-region-presets
     emoji: 🌎
     title: Multi-region with presets
+    rationale: |
+      LinkedIn-specific: API supports country-mix via `regions` array plus
+      named presets (nordic/dach/benelux/...) backed by curated country
+      groupings. No equivalent on other job-board APIs in the portfolio —
+      not promotable to catalog.
     body: |
       Pass `regions: ["US", "GB", "DE"]` for a custom country mix, or pick
       a preset like `"nordic"` / `"dach"` / `"benelux"` / `"uk-ireland"` /
       `"eu-27"` / `"gcc"` / `"mena"` / `"asean"` / `"latam"` /
       `"anglosphere"` for ready-made country groupings. One run, multiple
       regions, source country preserved on every record.
-  - id: recruiter-spam-filter
-    body: |
-      `removeAgency: true` runs a heuristic post-filter on company names
-      (matching "recruitment", "staffing", etc.) and drops listings from
-      3rd-party agencies — keep only direct-employer postings.
   - id: easy-apply
     emoji: ⚡
     title: Easy-Apply filter
+    rationale: |
+      LinkedIn-specific input flag (`easyApply: true`). Maps to LinkedIn's
+      proprietary Easy-Apply listing type. No analog on other job boards.
     body: |
       `easyApply: true` returns only LinkedIn Easy-Apply postings — useful
       for outreach lists targeting roles that don't redirect to external
@@ -35,15 +45,24 @@ keyFeatures:
   - id: company-filtering
     emoji: 🏢
     title: Company-level filtering
+    rationale: |
+      LinkedIn-specific: numeric `companyId` filter at API level + name
+      substring `excludeCompanies` post-filter. Other job boards don't
+      expose stable company IDs in the same way; promote to catalog if
+      Glassdoor/Indeed wrappers ever match the contract.
     body: |
       `companies: [123, 456]` filters at the LinkedIn API level (numeric
       `companyId`), or pass case-insensitive name substrings via
       `excludeCompanies` to drop staffing brands. Combine with
       `excludeKeywords` to scrub spam-prone titles.
-  - paste-mode
-  - detail-enrichment
-  - contact-extraction
-  - salary-data
   - compact
-  - description-truncation
-  - structured-export
+
+# Trimmed from 14 → 10 to fit cap. Removed: change-classification (overlaps
+# with incremental), contact-extraction (LinkedIn restricts contact info),
+# description-truncation (generic cost knob), structured-export (universally
+# true). Maintainer ordering preserved within the cap.
+disable_auto_detect:
+  - change-classification    # overlap with incremental
+  - contact-extraction        # LinkedIn hides contact info — low signal
+  - description-truncation    # generic cost knob, lowest priority
+  - structured-export         # universally true — every Apify actor exports JSON/CSV/Excel

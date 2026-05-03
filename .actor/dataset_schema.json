@@ -28,6 +28,8 @@
                     "salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod", "salarySource", "salaryIsPredicted",
                     "companyLogo", "companyDescription", "companyEmployeeCount", "companyWebsite", "companyAddress",
                     "recruiterName", "recruiterUrl", "recruiterTitle",
+                    "contactEmail", "contactPhone",
+                    "companyLinkedIn", "companySocialLinks", "applyEmail",
                     "extractedEmails", "extractedPhones", "extractedUrls", "socialProfiles",
                     "changeType", "firstSeenAt", "lastSeenAt", "previousSeenAt", "expiredAt",
                     "isRepost", "repostOfId", "repostDetectedAt",

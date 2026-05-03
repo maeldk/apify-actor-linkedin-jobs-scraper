@@ -201,6 +201,15 @@ export interface OutputItem {
   recruiterName: string | null;
   recruiterUrl: string | null;
   recruiterTitle: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+
+  // Company social / outbound
+  companyLinkedIn: string | null;
+  companySocialLinks: string[] | null;
+
+  // Apply
+  applyEmail: string | null;
 
   // Baseline extracted
   extractedEmails: string[];

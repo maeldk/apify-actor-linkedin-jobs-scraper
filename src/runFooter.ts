@@ -3,7 +3,7 @@
  * meaningful run. Visible only in Apify Console run-log, never in dataset.
  *
  * Optionally shows incremental-mode savings: when a run skipped already-seen
- * jobs via state-keyed dedup, displays "$X saved (Y%) via delta-mode" — a
+ * jobs via state-keyed dedup, displays "$X saved (Y%) via incremental mode" — a
  * subtle but powerful marketing nudge that reinforces the customer's choice
  * and creates psychological lock-in.
  *
@@ -13,7 +13,7 @@
  *
  *   import { logRunFooter } from './runFooter.js';
  *   logRunFooter({
- *     actorSlug: 'blackfalcondata/linkedin-jobs-scraper',
+ *     actorSlug: 'blackfalcondata/linkedin-jobs-incremental-feed',
  *     emitted: summary.new + summary.updated,
  *     unchangedSkipped: summary.unchanged,  // optional — only when incremental
  *     pricePerResult: 0.001,                 // optional — must match pricing
@@ -40,7 +40,10 @@ export interface RunFooterOptions {
 }
 
 export function logRunFooter(opts: RunFooterOptions): void {
-  if (opts.emitted < (opts.minThreshold ?? 20)) return;
+  // Threshold checks total observed activity (emitted + skipped via incremental)
+  // so "almost all unchanged" runs still surface the savings nudge.
+  const totalActivity = opts.emitted + (opts.unchangedSkipped ?? 0);
+  if (totalActivity < (opts.minThreshold ?? 20)) return;
   log.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   log.info(`✓ ${opts.emitted.toLocaleString('en-US')} new/updated jobs exported`);
 
@@ -49,7 +52,7 @@ export function logRunFooter(opts: RunFooterOptions): void {
     const totalSeen = opts.emitted + opts.unchangedSkipped;
     const savedUsd = opts.unchangedSkipped * opts.pricePerResult;
     const savedPct = Math.round((opts.unchangedSkipped / totalSeen) * 100);
-    log.info(`💸 ~$${savedUsd.toFixed(2)} saved (${savedPct}%) via delta-mode — ${opts.unchangedSkipped.toLocaleString('en-US')} already-seen jobs skipped`);
+    log.info(`💸 ~$${savedUsd.toFixed(2)} saved (${savedPct}%) via incremental mode — ${opts.unchangedSkipped.toLocaleString('en-US')} already-seen jobs skipped`);
   }
 
   log.info('✨ Like this scraper? Leave a quick review:');

@@ -1,28 +1,24 @@
 
 ## What does LinkedIn Jobs Scraper do?
 
-LinkedIn Jobs Scraper extracts structured job data from [linkedin.com](https://linkedin.com) — including salary data, contact details, company metadata, full descriptions, and location data. It supports location filters and controllable result limits, so you can run the same query consistently over time.
+LinkedIn Jobs Scraper extracts structured job data from [linkedin.com](https://linkedin.com) — including salary data, contact details (email, apply URL), company metadata, full descriptions, and location data. It supports location filters and controllable result limits, so you can run the same query consistently over time.
 
 ## Key features
 
-- **♻️ Incremental mode** — recurring runs emit and charge only for listings that are new or whose tracked content changed. Pair with notifications for daily "new jobs" alerts to your hiring team. Saves 80–95% on daily monitoring.
-- **📌 Change classification** — each record carries a `changeType` of `NEW` / `UPDATED` / `UNCHANGED` / `REAPPEARED` / `EXPIRED`. Default emits NEW + UPDATED + REAPPEARED; opt into the others with `emitUnchanged` / `emitExpired`. Repost detection flags previously-expired listings that come back.
-- **🔔 Notifications** — push new-listing alerts to Telegram, Slack, Discord, WhatsApp, or a generic webhook. Pair with incremental + `notifyOnlyChanges` for daily "new jobs" pings to your hiring channel.
-- **🌎 Multi-region with presets** — pass `regions: ["US", "GB", "DE"]` for a custom country mix, or pick a preset like `"nordic"` / `"dach"` / `"benelux"` / `"uk-ireland"` / `"eu-27"` / `"gcc"` / `"mena"` / `"asean"` / `"latam"` / `"anglosphere"` for ready-made country groupings. One run, multiple regions, source country preserved on every record.
-- **👤 Recruiter-spam filter** — `removeAgency: true` runs a heuristic post-filter on company names (matching "recruitment", "staffing", etc.) and drops listings from 3rd-party agencies — keep only direct-employer postings.
-- **⚡ Easy-Apply filter** — `easyApply: true` returns only LinkedIn Easy-Apply postings — useful for outreach lists targeting roles that don't redirect to external ATS systems.
-- **🏢 Company-level filtering** — `companies: [123, 456]` filters at the LinkedIn API level (numeric `companyId`), or pass case-insensitive name substrings via `excludeCompanies` to drop staffing brands. Combine with `excludeKeywords` to scrub spam-prone titles.
-- **🔗 Paste-mode** — paste any linkedin.com URL straight from your browser — single-job pages, search-results URLs, or category SEO URLs.
-- **📋 Detail enrichment** — two-stage mode: list, then enrich each job with the full description + detail-page fields. One toggle, no extra orchestration.
-- **📧 Email + phone extraction** — every record carries `extractedEmails[]` and `extractedPhones[]` regex-pulled from the description — direct-outreach lists with no extra processing step.
-- **💰 Structured salary** — salary parsed into `salaryMin` / `salaryMax` / `salaryCurrency` / period — no string parsing on your side. Includes `salaryHidden` flag when the source filtered against a bracket but the listing itself doesn't disclose.
-- **📦 Compact mode** — compact payloads with core fields only — pipe straight into your ATS, salary-benchmarking tool, or LLM context without parsing extras.
-- **✂️ Description truncation** — cap description length with `descriptionMaxLength` to control LLM prompt cost and dataset size — set 0 for full descriptions, or any char-limit to trim.
-- **📤 Export anywhere** — download the dataset as JSON, CSV, or Excel, or stream live via the Apify API and integrations (Make, Zapier, Google Sheets, n8n, …).
+- 🔁 **Incremental mode (delta pricing)** — recurring runs only emit and charge for listings that are new or whose tracked content changed. Pair with Apify Schedules to run hourly or daily and pay 90%+ less than full re-scrapes.
+- 📝 **Detail enrichment** — fetch full job descriptions, criteria (seniority level, employment type, industry, job function, workplace type), applicant counts, and posting benefits. Toggle on with `enrichDetails: true`. Description is returned as plain text, HTML, and Markdown.
+- 🌍 **Cross-region in one run** — combine `geoIds[]`, `regions[]` (ISO-2 codes), and 11 built-in presets (`nordic`, `dach`, `benelux`, `uk-ireland`, `eu-27`, `gcc`, `mena`, `asean`, `anglosphere`, `latam`, `nordics-extended`). Results are deduped on `jobId`.
+- 🎯 **Powerful filters** — `keywords`, `datePosted` (including unique `lastHour`), `jobType`, `experienceLevel`, `workType` (onsite/remote/hybrid), `salaryMin`/`salaryMax`, `companies`, `excludeCompanies`, `excludeKeywords`, `removeAgency`, `easyApply`, `distance`, and `sortBy`.
+- 🔗 **Related-jobs discovery** — set `discoverRelated: true` to expand seed jobs with LinkedIn's own related-jobs feed. Adds 10-30% more relevant matches on thin-market queries, deduped against the main result set.
+- ♻️ **Repost detection** — when a previously expired listing reappears with matching content, it is flagged with `isRepost: true` and `repostOfId`. Set `skipReposts: true` to filter them out of the dataset.
+- 📦 **Compact mode** — `compact: true` returns core fields only (AI-agent / MCP-friendly). Cuts payload by 80%+ when piping into LLMs.
+- ✂️ **Description truncation** — cap `descriptionMaxLength` to control output size and per-record cost when feeding pipelines that don't need full text.
+- 🔔 **Notifications built-in** — push results to Telegram, Discord, Slack, WhatsApp, or a custom webhook (n8n / Make / Zapier) after each run. Pair with `notifyOnlyChanges` to alert only on new or updated jobs.
+- 🔓 **No login required** — uses LinkedIn's public guest-jobs endpoints. Datacenter proxies are sufficient; no account credentials required.
 
 ## What data can you extract from linkedin.com?
 
-Each result includes Core listing fields (`jobId`, `linkedinJobId`, `jobUrl`, `title`, `location`, `country`, `postedAt`, and `seniorityLevel`, and more), detail fields when enrichment is enabled (`description`, `descriptionHtml`, `descriptionMarkdown`, and `postingBenefits`), contact and apply information (`applyUrl`, `applyType`, `easyApply`, and `extractedEmails`), and company metadata (`company`, `companyUrl`, `companyId`, and `companyLogo`). In standard mode, all fields are always present — unavailable data points are returned as `null`, never omitted. In compact mode, only core fields are returned.
+Each result includes Core listing fields (`scrapedAt`, `portalUrl`, `jobId`, `linkedinJobId`, `jobUrl`, `title`, `location`, and `country`, and more), detail fields when enrichment is enabled (`description`, `descriptionHtml`, `descriptionMarkdown`, and `postingBenefits`), contact and apply information (`applyUrl`, `applyType`, `easyApply`, and `extractedEmails`), and company metadata (`company`, `companyUrl`, `companyId`, and `companyLogo`). In standard mode, all fields are always present — unavailable data points are returned as `null`, never omitted. In compact mode, only core fields are returned.
 
 ## Input
 
@@ -33,7 +29,7 @@ Key parameters:
 - **`keywords`** — Job search keywords (e.g. "software engineer", "nurse"). Leave blank to browse all jobs in the selected location.
 - **`location`** — Free-text location (e.g. "Copenhagen, Denmark", "United States"). Use geoIds for higher precision.
 - **`geoIds`** — Numeric LinkedIn geoIds (e.g. "103644278" = United States). Each geoId becomes a separate query, deduped on jobId. (default: `[]`)
-- **`regions`** — Two-letter country codes (e.g. "DK", "DE", "US"). Resolved to LinkedIn country geoIds. Use geoIds[] for unsupported markets. (default: `[]`)
+- **`regions`** — Two-letter country codes (e.g. "US", "GB", "DE"). Resolved to LinkedIn country geoIds. Use geoIds[] for unsupported markets. (default: `[]`)
 - **`regionPresets`** — Pre-defined country grouping. Combined with regions[] if both are set.
 - **`datePosted`** — Filter by posting recency. "lastHour" is unique to this scraper. (default: `"anytime"`)
 - **`jobType`** — Multi-select employment type filter. (default: `[]`)
@@ -114,59 +110,33 @@ Each run produces a dataset of structured job records. Results can be downloaded
 
 ## Example job record
 
-The example below shows a single record from a run with `enrichDetails: true`. With detail enrichment off, the description and criteria fields are returned as `null` and only the SERP-card fields (title, company, location, postedAt, jobUrl, applyType) are populated. Salary fields are always `null` on the public guest API — LinkedIn only exposes salary to authenticated viewers.
-
 ```json
 {
-  "scrapedAt": "2026-04-27T08:14:22.140Z",
+  "scrapedAt": "2026-04-27T19:02:37.769Z",
   "portalUrl": "https://www.linkedin.com",
   "source": "linkedin",
-  "jobId": "306a0079177ef855fbd37ecb5d1b5b77c675b372996c405289d943dcfdfd1167",
-  "linkedinJobId": "4373435862",
-  "jobUrl": "https://www.linkedin.com/jobs/view/software-engineer-media-encoding-pipelines-l4-at-netflix-4373435862",
-  "title": "Software Engineer, Media Encoding Pipelines (L4)",
-  "company": "Netflix",
-  "companyUrl": "https://www.linkedin.com/company/netflix",
-  "companyId": "netflix",
-  "location": "Los Gatos, CA, United States",
-  "country": "United States",
-  "postedAt": "2026-04-26T00:00:00.000Z",
-  "applyUrl": "https://www.linkedin.com/jobs/view/software-engineer-media-encoding-pipelines-l4-at-netflix-4373435862",
-  "applyType": "offsite",
-  "description": "Netflix is one of the world's leading entertainment services... The Media Encoding Pipelines team builds the systems that deliver every frame of video to over 270 million members. We are looking for a Senior Software Engineer to design and operate the distributed encoding workflows that power our streaming catalog...",
-  "descriptionHtml": "<p>Netflix is one of the world's leading entertainment services... <strong>The Media Encoding Pipelines team</strong> builds the systems that deliver every frame of video...</p><ul><li>Design distributed encoding workflows</li><li>Operate large-scale Java/Python services</li></ul>",
-  "descriptionMarkdown": "Netflix is one of the world's leading entertainment services...\n\n## The Media Encoding Pipelines team\n\n- Design distributed encoding workflows\n- Operate large-scale Java/Python services",
-  "seniorityLevel": "Mid-Senior level",
+  "jobId": "1705fc4ee704bf3584cf2654b20e8f95383167563ff7ecd0184b58d2c7d66236",
+  "linkedinJobId": "4406118990",
+  "jobUrl": "https://www.linkedin.com/jobs/view/software-engineer-new-grad-at-notion-4406118990",
+  "title": "Software Engineer, New Grad",
+  "company": "Notion",
+  "companyUrl": "https://www.linkedin.com/company/notionhq",
+  "companyId": "notionhq",
+  "location": "San Francisco, CA",
+  "country": "CA",
+  "postedAt": "2026-04-24T00:00:00.000Z",
+  "applyUrl": "https://www.linkedin.com/jobs/view/software-engineer-new-grad-at-notion-4406118990",
+  "applyType": "unknown",
+  "description": "About Us Notion helps you build beautiful tools for your life’s work. In today's world of endless apps and tabs, Notion provides one place for teams to get everything done, seamlessly connecting docs,...",
+  "descriptionHtml": "<strong>About Us<br><br></strong>Notion helps you build beautiful tools for your life’s work. In today's world of endless apps and tabs, Notion provides one place for teams to get everything done, sea...",
+  "descriptionMarkdown": "About Us Notion helps you build beautiful tools for your life’s work. In today's world of endless apps and tabs, Notion provides one place for teams to get everything done, seamlessly connecting docs,...",
+  "seniorityLevel": "Not Applicable",
   "employmentType": "Full-time",
-  "industry": "Entertainment Providers · Software Development",
+  "industry": "Software Development",
   "jobFunction": "Engineering and Information Technology",
-  "workplaceType": "hybrid",
+  "workplaceType": null,
   "applicantCount": 200,
-  "easyApply": false,
-  "salaryMin": null,
-  "salaryMax": null,
-  "salaryCurrency": null,
-  "salaryPeriod": null,
-  "extractedEmails": ["recruiting@netflix.com"],
-  "extractedPhones": [],
-  "extractedUrls": [],
-  "socialProfiles": {
-    "linkedin": [], "twitter": [], "instagram": [], "facebook": [],
-    "youtube": [], "tiktok": [], "github": [], "xing": []
-  },
-  "changeType": "NEW",
-  "firstSeenAt": "2026-04-27T08:14:22.140Z",
-  "lastSeenAt": "2026-04-27T08:14:22.140Z",
-  "previousSeenAt": null,
-  "expiredAt": null,
-  "isRepost": false,
-  "repostOfId": null,
-  "repostDetectedAt": null,
-  "isPromoted": false,
-  "postingBenefits": ["Actively recruiting"],
-  "trackingId": "BB8tQ2ZDR9q4yC3VfWxYsg==",
-  "contentHash": "sha256:6f48bd2e7c8a1e50",
-  "language": null
+  "easyApply": false
 }
 ```
 
@@ -224,7 +194,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $7.51. First month with incremental costs $0.63 / $1.35 / $2.44 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-04-26T21:27:18.371Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-04-27T19:43:03.299Z","version":1} -->
 
 ## FAQ
 
