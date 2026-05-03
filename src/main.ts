@@ -395,7 +395,7 @@ async function main() {
             });
             if (html) {
               const detail = parseDetail(html);
-              items[idx] = mergeDetail(item, detail);
+              items[idx] = mergeDetail(item, detail, input.phoneExtractionMode);
               enriched++;
             } else {
               failed++;
@@ -596,6 +596,7 @@ function buildExpiredStub(
     salarySource: null, salaryIsPredicted: null,
     companyLogo: null, companyDescription: null, companyEmployeeCount: null,
     companyWebsite: null, companyAddress: null,
+    contactName: null,
     recruiterName: null, recruiterUrl: null, recruiterTitle: null,
     contactEmail: null, contactPhone: null,
     companyLinkedIn: null, companySocialLinks: null,

@@ -3,11 +3,12 @@ import type { ApiJob } from './apiClient.js';
 import type { ParsedDetail } from './detailParser.js';
 import { SOURCE_NAME } from './constants.js';
 import { createHash } from 'node:crypto';
+import { extractPhones as extractPhonesLib, type PhoneExtractionMode } from './phoneExtractor.js';
+import { extractUrls } from './urlExtractor.js';
 
 const PROFILE_HOST_RE = /^(?:[a-z]{2,3}\.)?linkedin\.com$/i;
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+/g;
-const PHONE_RE = /(?:\+?\d[\d\s().\-]{7,}\d)/g;
 const URL_RE = /https?:\/\/[^\s<>"'()]+/gi;
 const SOCIAL_HOST_RE = /(?:linkedin\.com|twitter\.com|x\.com|facebook\.com|instagram\.com|youtube\.com|tiktok\.com|github\.com|xing\.com)/i;
 const EMAIL_NOISE_DOMAINS = new Set([
@@ -17,15 +18,46 @@ const EMAIL_NOISE_DOMAINS = new Set([
 ]);
 const EMAIL_NOISE_TLDS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'css', 'js']);
 
-export function extractPhones(text: string | null | undefined): string[] {
-  if (!text) return [];
-  const out = new Set<string>();
-  for (const raw of text.match(PHONE_RE) ?? []) {
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length < 8 || digits.length > 15) continue;
-    out.add(raw.trim());
-  }
-  return [...out];
+/** Delegate to the canonical _lib phone extractor (multilingual, strict/lenient modes). */
+export function extractPhones(text: string | null | undefined, mode: PhoneExtractionMode = 'strict'): string[] {
+  return extractPhonesLib(text, { mode });
+}
+
+/** Convert a nullable social URL to a single-element or empty array (OutputItem shape). */
+function toArr(v: string | null): string[] {
+  return v ? [v] : [];
+}
+
+/** Map extractUrls social result → OutputItem.socialProfiles (8-platform string[] shape). */
+function toSocialProfiles(social: ReturnType<typeof extractUrls>['social']): OutputItem['socialProfiles'] {
+  return {
+    linkedin: toArr(social.linkedin),
+    twitter: toArr(social.twitter),
+    instagram: toArr(social.instagram),
+    facebook: toArr(social.facebook),
+    youtube: toArr(social.youtube),
+    tiktok: toArr(social.tiktok),
+    github: toArr(social.github),
+    xing: toArr(social.xing),
+  };
+}
+
+/** Merge two socialProfiles objects, deduplicating URLs per platform. */
+function mergeSocialProfiles(
+  a: OutputItem['socialProfiles'],
+  b: OutputItem['socialProfiles'],
+): OutputItem['socialProfiles'] {
+  const merge = (x: string[], y: string[]): string[] => Array.from(new Set([...x, ...y]));
+  return {
+    linkedin: merge(a.linkedin, b.linkedin),
+    twitter: merge(a.twitter, b.twitter),
+    instagram: merge(a.instagram, b.instagram),
+    facebook: merge(a.facebook, b.facebook),
+    youtube: merge(a.youtube, b.youtube),
+    tiktok: merge(a.tiktok, b.tiktok),
+    github: merge(a.github, b.github),
+    xing: merge(a.xing, b.xing),
+  };
 }
 
 /** Extract first mailto: address from URL/href text (apply-redirect or description). */
@@ -109,12 +141,15 @@ function descriptionToMarkdown(text: string | null): string | null {
 }
 
 /** Merge parsed detail-page fields onto an existing OutputItem. Returns a new object. */
-export function mergeDetail(item: OutputItem, detail: ParsedDetail): OutputItem {
+export function mergeDetail(item: OutputItem, detail: ParsedDetail, phoneMode: PhoneExtractionMode = 'strict'): OutputItem {
   const description = detail.description ?? item.description;
   const descriptionHtml = detail.descriptionHtml ?? item.descriptionHtml;
   const emails = Array.from(new Set([...item.extractedEmails, ...extractEmails(description), ...extractEmails(descriptionHtml)]));
-  const phones = Array.from(new Set([...item.extractedPhones, ...extractPhones(description)]));
+  const phones = Array.from(new Set([...item.extractedPhones, ...extractPhones(description, phoneMode)]));
   const socials = Array.from(new Set([...(item.companySocialLinks ?? []), ...extractSocialLinks(descriptionHtml)]));
+  const { urls: newUrls, social } = extractUrls(description, { excludeHosts: ['www.linkedin.com', 'linkedin.com'] });
+  const mergedUrls = Array.from(new Set([...item.extractedUrls, ...newUrls])).sort();
+  const mergedSocialProfiles = mergeSocialProfiles(item.socialProfiles, toSocialProfiles(social));
   // contactEmail / contactPhone are STRUCTURED-ONLY per FIELD_SEMANTICS.md.
   // LinkedIn's guest API exposes ZERO structured recruiter contact — emails
   // surfaced in description text are overwhelmingly EEO-compliance / HR-support
@@ -132,6 +167,8 @@ export function mergeDetail(item: OutputItem, detail: ParsedDetail): OutputItem 
     descriptionMarkdown: descriptionToMarkdown(description),
     extractedEmails: emails,
     extractedPhones: phones,
+    extractedUrls: mergedUrls,
+    socialProfiles: mergedSocialProfiles,
     companySocialLinks: socials.length > 0 ? socials : item.companySocialLinks,
     contactEmail,
     contactPhone,
@@ -234,6 +271,7 @@ export function transformJob(apiJob: ApiJob, scrapedAt: string): OutputItem {
     companyWebsite: null,
     companyAddress: null,
 
+    contactName: null,
     recruiterName: null,
     recruiterUrl: null,
     recruiterTitle: null,

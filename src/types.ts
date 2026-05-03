@@ -198,6 +198,7 @@ export interface OutputItem {
   } | null;
 
   // Recruiter
+  contactName: string | null;
   recruiterName: string | null;
   recruiterUrl: string | null;
   recruiterTitle: string | null;
