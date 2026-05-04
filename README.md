@@ -3,6 +3,8 @@
 
 LinkedIn Jobs Scraper extracts structured job data from [linkedin.com](https://linkedin.com) — including salary data, contact details (email, apply URL), company metadata, full descriptions, and location data. It supports location filters and controllable result limits, so you can run the same query consistently over time.
 
+**New to Apify?** [Sign up free](https://console.apify.com/sign-up?fpr=1h3gvi) and use the included $5 monthly platform credit to test this actor.
+
 ## Key features
 
 - 🔁 **Incremental mode (delta pricing)** — recurring runs only emit and charge for listings that are new or whose tracked content changed. Pair with Apify Schedules to run hourly or daily and pay 90%+ less than full re-scrapes.
