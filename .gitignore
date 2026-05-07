@@ -7,3 +7,8 @@ apify_storage/
 .DS_Store
 .claude/
 verify-input.json
+*.log
+.env.*
+crawlee_storage/
+_raw_banner.png
+.wrangler/

@@ -14,6 +14,18 @@ import { lockKvKey, tryAcquire, verifyLock, type StateLock } from './stateLock.j
 import { buildStateKey } from './buildStateKey.js';
 import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, type RunMetadata } from './notifications.js';
 import { logRunFooter } from './runFooter.js';
+import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
+
+async function failWith(internalCause: unknown, code: ErrCode, runStartTs: number, emitted: number, unchangedSkipped: number): Promise<never> {
+  await emit({
+    type: 'run.complete',
+    payload: { emitted, unchangedSkipped, totalReviews: emitted + unchangedSkipped, status: 'failed', ok: false, durationMs: Date.now() - runStartTs },
+    cause: internalCause,
+  });
+  const safeMsg = internalCause instanceof UserSafeError ? internalCause.message : userSafeError(internalCause, code).message;
+  await Actor.fail(safeMsg);
+  throw new Error(safeMsg);
+}
 import { resolveRegions } from './regionResolver.js';
 
 const STATE_STORE = 'linkedin-jobs-state';
@@ -210,6 +222,13 @@ async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: strin
 
 async function main() {
   await Actor.init();
+  const runStartTs = Date.now();
+  let emittedCount = 0;
+  let unchangedSkipped = 0;
+  const heartbeatInterval = setInterval(() => {
+    void emit({ type: 'info', detail: 'heartbeat', payload: { elapsedMs: Date.now() - runStartTs } });
+  }, 60_000);
+  if (typeof heartbeatInterval.unref === 'function') heartbeatInterval.unref();
 
   try { await Actor.charge({ eventName: 'apify-actor-start', count: 1 }); } catch { /* non-PPE */ }
 
@@ -222,6 +241,7 @@ async function main() {
   }
 
   const rawInput = await Actor.getInput<Partial<Input>>();
+  await emit({ type: 'run.start', payload: { input: sanitizeInputForDiag(rawInput) } });
   const input = normalizeInput(rawInput ?? {});
 
   // Auto-derive stateKey when not explicitly set: fingerprint search inputs so
@@ -296,7 +316,10 @@ async function main() {
     const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
     const { result: lockResult, newLock } = tryAcquire(existingLock, runId, input.stateKey);
     if (!lockResult.acquired) {
-      throw await Actor.fail(`Another run is using stateKey "${input.stateKey}".`);
+      log.warning(`State lock held by another run for stateKey "${input.stateKey}" — exiting gracefully.`);
+      await emit({ type: 'run.complete', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'success', ok: true, durationMs: Date.now() - runStartTs, reason: 'lock_busy' } });
+      await Actor.exit();
+      return;
     }
     if (newLock) await kvStore.setValue(lockKey, newLock);
   }
@@ -497,11 +520,11 @@ async function main() {
       const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
       const currentLock = await kvStore.getValue<StateLock>(lockKey);
       if (!verifyLock(currentLock, runId)) {
-        throw await Actor.fail('State lock lost during run.');
+        await failWith(new Error('state lock lost during run'), 'LIN-4001', runStartTs, emittedCount ?? 0, unchangedSkipped ?? 0);
       }
       await kvStore.setValue(stateKvKey(input.stateKey), buildUpdatedState(input.stateKey, scrapedAt, priorState, classifications, snapshots));
 
-      const unchangedSkipped = classifications.filter((c) => c.changeType === 'UNCHANGED').length;
+      unchangedSkipped = classifications.filter((c) => c.changeType === 'UNCHANGED').length;
       log.info('Incremental complete', { emitted: toPush.length, unchangedSkipped });
       logRunFooter({
         actorSlug: 'blackfalcondata/linkedin-jobs-scraper',
@@ -531,9 +554,13 @@ async function main() {
       emitted: toPush.length,
       pricePerResult: DEFAULTS.pricePerResult,
     });
+    emittedCount = toPush.length;
   } finally {
     await releaseLock();
   }
+
+  await emit({ type: 'run.complete', payload: { emitted: emittedCount, unchangedSkipped, totalReviews: emittedCount + unchangedSkipped, status: 'success', ok: true, durationMs: Date.now() - runStartTs } });
+
 
   await Actor.exit();
 }
