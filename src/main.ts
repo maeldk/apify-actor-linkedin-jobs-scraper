@@ -16,9 +16,24 @@ import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, typ
 import { logRunFooter } from './runFooter.js';
 import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
 
+function classifyFallbackErrCode(internalCause: unknown, fallback: ErrCode): ErrCode {
+  if (fallback !== 'LIN-9000') return fallback;
+  const text = internalCause instanceof Error ? internalCause.message : String(internalCause);
+  const msg = text.toLowerCase();
+  if (/\b(429|rate.?limit|too many requests)\b/i.test(text)) return 'LIN-2030';
+  if (/\b(403|401|unauthori[sz]ed|forbidden|blocked|waf|cloudflare|akamai|challenge|captcha)\b/i.test(text)) return 'LIN-2030';
+  if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b5\d{2}\b/.test(text)) return 'LIN-2010';
+  if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b[1-5]\d{2}\b/.test(text)) return 'LIN-2010';
+  if (/\b(unexpected|invalid|parse|json|shape|missing|endpoint may have changed|structure)\b/i.test(text)) return 'LIN-3001';
+  if (/\b(timeout|timed out|econnreset|econnrefused|enotfound|network|socket|fetch failed|abort)\b/i.test(text)) return 'LIN-2001';
+  if (/\b(lock lost|state lock lost)\b/i.test(msg)) return 'LIN-4001';
+  return fallback;
+}
 async function failWith(internalCause: unknown, code: ErrCode, runStartTs: number, emitted: number, unchangedSkipped: number): Promise<never> {
+  const effectiveCode: ErrCode = internalCause instanceof UserSafeError ? internalCause.code : classifyFallbackErrCode(internalCause, code);
   await emit({
     type: 'run.complete',
+    code: effectiveCode,
     payload: { emitted, unchangedSkipped, totalReviews: emitted + unchangedSkipped, status: 'failed', ok: false, durationMs: Date.now() - runStartTs },
     cause: internalCause,
   });
@@ -281,7 +296,7 @@ async function main() {
 
   }
   if (!input.keywords && !input.geoIds.length && !input.regions.length && !input.regionPresets && !input.location && !input.startUrls.length) {
-    throw await Actor.fail('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.');
+    await failWith(new Error('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.'), 'LIN-1001', runStartTs, 0, 0);
   }
   if (input.regions.length > 0 || input.regionPresets) {
     const expanded = expandGeoIds(input);
