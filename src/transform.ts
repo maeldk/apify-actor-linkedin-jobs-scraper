@@ -145,6 +145,15 @@ const COUNTRY_NAME_TO_ISO2: Record<string, string> = {
   'venezuela': 'VE',
   'vietnam': 'VN',
 };
+const US_STATE_CODES = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+  'DC',
+]);
+const CA_PROVINCE_CODES = new Set(['AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT']);
 
 /** Delegate to the canonical _lib phone extractor (multilingual, strict/lenient modes). */
 export function extractPhones(text: string | null | undefined, mode: PhoneExtractionMode = 'strict'): string[] {
@@ -238,9 +247,15 @@ function parseIsoDate(raw: string | null | undefined): string | null {
 
 function inferCountryFromLocation(location: string | null): string | null {
   if (!location) return null;
-  const tail = location.split(',').pop()?.trim();
+  const parts = location.split(',').map((s) => s.trim()).filter(Boolean);
+  const tail = parts[parts.length - 1];
   if (!tail) return null;
-  if (/^[A-Z]{2}$/i.test(tail)) return tail.toUpperCase();
+  if (/^[A-Z]{2}$/i.test(tail)) {
+    const up = tail.toUpperCase();
+    if (parts.length > 1 && US_STATE_CODES.has(up)) return 'US';
+    if (parts.length > 1 && CA_PROVINCE_CODES.has(up)) return 'CA';
+    return up;
+  }
   return COUNTRY_NAME_TO_ISO2[tail.toLowerCase()] ?? null;
 }
 

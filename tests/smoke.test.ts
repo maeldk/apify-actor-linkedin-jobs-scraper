@@ -176,6 +176,11 @@ describe('transformJob', () => {
 
   it('normalizes country to ISO-2 or null', () => {
     expect(transformJob({ ...MOCK_API_JOB, location: 'New York, NY, United States' }, scrapedAt).country).toBe('US');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Los Angeles, CA' }, scrapedAt).country).toBe('US');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Austin, TX' }, scrapedAt).country).toBe('US');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Toronto, ON' }, scrapedAt).country).toBe('CA');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Vancouver, BC' }, scrapedAt).country).toBe('CA');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'CA' }, scrapedAt).country).toBe('CA');
     expect(transformJob({ ...MOCK_API_JOB, location: 'Berlin, Deutschland' }, scrapedAt).country).toBe('DE');
     expect(transformJob({ ...MOCK_API_JOB, location: 'Paris, Allemagne' }, scrapedAt).country).toBe('DE');
     expect(transformJob({ ...MOCK_API_JOB, location: 'Algiers, Algeria' }, scrapedAt).country).toBe('DZ');
