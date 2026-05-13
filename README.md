@@ -8,17 +8,17 @@ LinkedIn Job Monitor tracks [linkedin.com](https://linkedin.com) searches over t
 ## Key features
 
 <!-- KEY_FEATURES:START -->
-- **Incremental mode** — recurring runs emit only NEW / UPDATED / REAPPEARED records; UNCHANGED and EXPIRED are opt-in. First run builds the baseline; subsequent runs emit and charge only for the diff.
-- **Notifications** — Telegram, Slack, Discord, WhatsApp Cloud API, and generic webhook outputs. Pair with incremental + `notifyOnlyChanges` for daily new-job alerts.
-- **AI-ready output** — deterministic `aiSummary` and `skills` fields give compact context for ATS, recruiting agents, and MCP workflows without extra enrichment calls.
-- **Paste-mode** — paste a LinkedIn job search URL copied from your browser. The actor reads the URL's keywords, location, geoId, date, work type, job type, company, Easy Apply, and sort filters and runs that search directly.
-- **Recruiter-spam filter** — `removeAgency: true` runs a heuristic post-filter on company names and drops listings from third-party agencies.
-- **Detail enrichment** — two-stage mode: list, then enrich each job with the full description plus detail-page fields such as apply counts and education.
-- **Description truncation** — cap enriched descriptions with `descriptionMaxLength` when downstream systems need smaller records.
-- **Multi-region with presets** — pass `regions: ["US", "GB", "DE"]` for a custom country mix, or pick presets like `"nordic"`, `"dach"`, `"benelux"`, `"uk-ireland"`, `"eu-27"`, `"gcc"`, `"mena"`, `"asean"`, `"latam"`, or `"anglosphere"`.
-- **Easy-Apply filter** — `easyApply: true` returns only LinkedIn Easy-Apply postings.
-- **Company-level filtering** — `companies: [123, 456]` filters at the LinkedIn API level, while `excludeCompanies` and `excludeKeywords` remove unwanted matches after fetch.
-- **Compact mode** — AI-agent and MCP-friendly compact payloads with core fields only; pipe them into your ATS, monitoring workflow, or LLM context without parsing extras.
+- **♻️ Incremental mode** — recurring runs emit only NEW / UPDATED / REAPPEARED records; UNCHANGED and EXPIRED are opt-in. First run builds the baseline; subsequent runs emit and charge only for the diff.
+- **🔔 Notifications** — Telegram, Slack, Discord, WhatsApp Cloud API, and generic webhook outputs. Pair with incremental + `notifyOnlyChanges` for daily new-job alerts.
+- **🤖 AI-ready output** — deterministic `aiSummary` and `skills` fields give compact context for ATS, recruiting agents, and MCP workflows without extra enrichment calls.
+- **🔗 Paste-mode** — paste a LinkedIn job search URL copied from your browser. The actor reads the URL's keywords, location, geoId, date, work type, job type, company, Easy Apply, and sort filters and runs that search directly.
+- **🚫 Recruiter-spam filter** — `removeAgency: true` runs a heuristic post-filter on company names and drops listings from third-party agencies.
+- **📋 Detail enrichment** — two-stage mode: list, then enrich each job with the full description plus detail-page fields such as apply counts and education.
+- **✂️ Description truncation** — cap enriched descriptions with `descriptionMaxLength` when downstream systems need smaller records.
+- **🌎 Multi-region with presets** — pass `regions: ["US", "GB", "DE"]` for a custom country mix, or pick presets like `"nordic"`, `"dach"`, `"benelux"`, `"uk-ireland"`, `"eu-27"`, `"gcc"`, `"mena"`, `"asean"`, `"latam"`, or `"anglosphere"`.
+- **⚡ Easy-Apply filter** — `easyApply: true` returns only LinkedIn Easy-Apply postings.
+- **🏢 Company-level filtering** — `companies: [123, 456]` filters at the LinkedIn API level, while `excludeCompanies` and `excludeKeywords` remove unwanted matches after fetch.
+- **📦 Compact mode** — AI-agent and MCP-friendly compact payloads with core fields only; pipe them into your ATS, monitoring workflow, or LLM context without parsing extras.
 <!-- KEY_FEATURES:END -->
 
 ## What data can you extract from linkedin.com?
@@ -241,7 +241,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $7.51. First month with incremental costs $0.63 / $1.35 / $2.44 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-05-13T19:58:44.030Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-05-13T20:06:29.636Z","version":1} -->
 
 ## FAQ
 
