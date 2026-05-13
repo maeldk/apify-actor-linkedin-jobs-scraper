@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULTS, COMPACT_FIELDS, SOURCE_NAME, REGION_PRESETS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from '../src/constants.js';
-import { transformJob, buildContentHash, applyDescriptionMaxLength, mergeDetail } from '../src/transform.js';
+import { transformJob, buildContentHash, applyDescriptionMaxLength, mergeDetail, inferCountryHintFromSearchLocation } from '../src/transform.js';
 import type { ApiJob } from '../src/apiClient.js';
 import { classifyJob, detectRepostMatch, buildUpdatedState, findExpiredJobs, filterByEmissionPolicy } from '../src/incrementalState.js';
 import type { IncrementalState, ClassifiedRecord, JobStateEntry } from '../src/incrementalState.js';
@@ -192,6 +192,16 @@ describe('transformJob', () => {
     expect(transformJob({ ...MOCK_API_JOB, location: 'Stockholm, Sverige' }, scrapedAt).country).toBe('SE');
     expect(transformJob({ ...MOCK_API_JOB, location: 'Remote, XX' }, scrapedAt).country).toBe('XX');
     expect(transformJob({ ...MOCK_API_JOB, location: 'Remote, Atlantis' }, scrapedAt).country).toBeNull();
+  });
+
+  it('derives conservative country hints from search locations', () => {
+    expect(inferCountryHintFromSearchLocation('Los Angeles, CA')).toBe('US');
+    expect(inferCountryHintFromSearchLocation('Austin, TX')).toBe('US');
+    expect(inferCountryHintFromSearchLocation('Toronto, ON')).toBe('CA');
+    expect(inferCountryHintFromSearchLocation('Vancouver, BC')).toBe('CA');
+    expect(inferCountryHintFromSearchLocation('Berlin, Germany')).toBe('DE');
+    expect(inferCountryHintFromSearchLocation('Berlin, DE')).toBe('US');
+    expect(inferCountryHintFromSearchLocation('CA')).toBe('US');
   });
 });
 

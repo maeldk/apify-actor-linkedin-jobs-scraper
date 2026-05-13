@@ -3,7 +3,7 @@ import type { Input, NormalizedInput, OutputItem } from './types.js';
 import { DEFAULTS, COMPACT_FIELDS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from './constants.js';
 import { searchJobs, fetchJobDetail, fetchRelatedJobs, type SearchParams } from './apiClient.js';
 import type { ApiJob } from './apiClient.js';
-import { transformJob, mergeDetail, applyDescriptionMaxLength } from './transform.js';
+import { transformJob, mergeDetail, applyDescriptionMaxLength, inferCountryHintFromSearchLocation } from './transform.js';
 import { parseDetail } from './detailParser.js';
 import {
     type IncrementalState, type ClassifiedRecord, type TrackedFields,
@@ -88,6 +88,10 @@ const SB2_REVERSE: Record<string, number> = {
 
 function countryHintFromGeoId(geoId: string | undefined): string | null {
   return geoId ? GEOID_TO_ISO2[geoId] ?? null : null;
+}
+
+function countryHintFromSearchParams(params: SearchParams): string | null {
+  return countryHintFromGeoId(params.geoId) ?? inferCountryHintFromSearchLocation(params.location);
 }
 
 function csvParam<T extends string>(raw: string | null, map: Record<string, T>): T[] | undefined {
@@ -197,7 +201,7 @@ function buildQueries(input: NormalizedInput): QuerySpec[] {
   if (input.startUrls.length) {
     for (const url of input.startUrls) {
       const params = parseStartUrl(url, input);
-      queries.push({ params, countryHint: countryHintFromGeoId(params.geoId) });
+      queries.push({ params, countryHint: countryHintFromSearchParams(params) });
     }
     return queries;
   }
@@ -211,14 +215,14 @@ function buildQueries(input: NormalizedInput): QuerySpec[] {
     for (const geoId of geoIds) {
       queries.push({
         params: { ...baseFilters, keywords: input.keywords || undefined, geoId },
-        countryHint: countryHintFromGeoId(geoId),
+        countryHint: countryHintFromSearchParams({ ...baseFilters, geoId }),
       });
     }
   } else {
     const params = { ...baseFilters, keywords: input.keywords || undefined, location: input.location };
     queries.push({
       params,
-      countryHint: null,
+      countryHint: countryHintFromSearchParams(params),
     });
   }
 
@@ -408,7 +412,7 @@ async function main() {
             for (const r of related) {
               if (seenJobIds.has(r.jobId)) continue;
               seenJobIds.add(r.jobId);
-              countryHints.set(r.jobId, countryHints.get(seed.jobId) ?? null);
+              countryHints.set(r.jobId, null);
               allJobs.push(r);
               added++;
             }

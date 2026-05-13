@@ -156,6 +156,21 @@ const US_STATE_CODES = new Set([
 const CA_PROVINCE_CODES = new Set(['AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT']);
 const AMBIGUOUS_SUBDIVISION_CODES = new Set([...US_STATE_CODES, ...CA_PROVINCE_CODES]);
 
+export function inferCountryHintFromSearchLocation(location: string | null | undefined): string | null {
+  if (!location) return null;
+  const parts = location.split(',').map((s) => s.trim()).filter(Boolean);
+  const tail = parts[parts.length - 1];
+  if (!tail) return null;
+  const country = COUNTRY_NAME_TO_ISO2[tail.toLowerCase()];
+  if (country) return country;
+  if (/^[A-Z]{2}$/i.test(tail)) {
+    const up = tail.toUpperCase();
+    if (US_STATE_CODES.has(up)) return 'US';
+    if (CA_PROVINCE_CODES.has(up)) return 'CA';
+  }
+  return null;
+}
+
 /** Delegate to the canonical _lib phone extractor (multilingual, strict/lenient modes). */
 export function extractPhones(text: string | null | undefined, mode: PhoneExtractionMode = 'strict'): string[] {
   return extractPhonesLib(text, { mode });
