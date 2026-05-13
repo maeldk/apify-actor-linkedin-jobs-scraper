@@ -1,8 +1,8 @@
 {
     "actorSpecification": 1,
     "name": "linkedin-jobs-scraper",
-    "title": "LinkedIn Jobs Scraper — Pay only for new or changed listings",
-    "description": "Scrape linkedin.com jobs — title, company, location, salary, full description, apply URL, contact email — with state-keyed delta pricing. Recurring runs only charge for new or changed listings; already-seen jobs are skipped. Telegram/Discord/Slack/WhatsApp/webhook notifications.",
+    "title": "LinkedIn Job Monitor — Alerts + delta pricing",
+    "description": "Track linkedin.com jobs over time — title, company, location, full description, skills, AI summary, apply URL, and alerts. Recurring runs charge only for new or changed listings; already-seen jobs are skipped.",
     "version": "0.1",
     "buildTag": "latest",
     "readme": "../README.md",

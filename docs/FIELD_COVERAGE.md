@@ -52,6 +52,8 @@ We map by H3 label text (not by index) to avoid misalignment.
 | `.show-more-less-html__markup` (innerHTML) | `descriptionHtml` | MAPPED |
 | `.show-more-less-html__markup` (text) | `description` | MAPPED |
 | `(derived from description text)` | `descriptionMarkdown` | MAPPED (Markdown render) |
+| `(derived from title + description + criteria text)` | `skills` | DERIVED (deterministic keyword extraction) |
+| `(derived from title/company/location + first description sentence)` | `aiSummary` | DERIVED (280-char deterministic summary) |
 | `description__job-criteria-list > li` "Seniority level" | `seniorityLevel` | MAPPED |
 | `description__job-criteria-list > li` "Employment type" | `employmentType` | MAPPED |
 | `description__job-criteria-list > li` "Job function" | `jobFunction` | MAPPED |
@@ -60,6 +62,9 @@ We map by H3 label text (not by index) to avoid misalignment.
 | `.num-applicants__caption` | `applicantCount` | MAPPED (numeric) |
 | `<time datetime>` (detail) | `postedRelative` | MAPPED (used to refresh `postedAt`) |
 | `(derived from `description` text)` | `extractedEmails` | MAPPED (regex pass on description) |
+| `(structured recruiter contact not exposed in guest HTML)` | `contactName` | RESERVED: remains `null` unless LinkedIn exposes structured contact data |
+| `(structured recruiter contact not exposed in guest HTML)` | `contactEmail` | RESERVED: description emails stay in `extractedEmails` only |
+| `(structured recruiter contact not exposed in guest HTML)` | `contactPhone` | RESERVED: description phones stay in `extractedPhones` only |
 
 ## Derived / Computed Fields
 
@@ -67,8 +72,11 @@ We map by H3 label text (not by index) to avoid misalignment.
 |---|---|---|
 | `jobId` | `sha256("linkedin:" + linkedinJobId)` | DERIVED |
 | `companyId` | parsed from `companyUrl` (`/company/<slug>`) | DERIVED |
-| `country` | last comma-separated segment of `location` | DERIVED |
+| `country` | ISO-2 code inferred from last comma-separated segment of `location` | DERIVED |
 | `applyType` | `"onsite"` if Easy-Apply badge, else `"unknown"` | DERIVED |
+| `companyLinkedIn` | normalized from `companyUrl` | DERIVED |
+| `companySocialLinks` | LinkedIn/social URLs found in detail description HTML | MAPPED |
+| `applyEmail` | `mailto:` address parsed from `jobUrl` when present | MAPPED |
 | `portalUrl` | constant `https://www.linkedin.com` | DERIVED |
 | `scrapedAt` | run start ISO timestamp | DERIVED |
 | `source` | constant `"linkedin"` | DERIVED |

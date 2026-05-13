@@ -95,6 +95,17 @@ function safeHost(rawUrl: string): string | null {
   try { return new URL(rawUrl).hostname.toLowerCase(); } catch { return null; }
 }
 
+function normalizeUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    url.hostname = url.hostname.toLowerCase();
+    url.hash = '';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return rawUrl.replace(/\/+$/, '');
+  }
+}
+
 function isNoiseHost(host: string): boolean {
   for (const td of TRACKING_DOMAINS) {
     if (host === td || host.endsWith('.' + td)) return true;
@@ -119,8 +130,8 @@ export function extractUrls(text: string | null | undefined, opts?: UrlExtractio
     if (isNoiseHost(host)) continue;
     if (excludeHosts.has(host)) continue;
 
-    // Normalize: strip trailing slash for dedup
-    const normalized = url.replace(/\/+$/, '');
+    // Normalize: lowercase host, strip hash/trailing slash for dedup
+    const normalized = normalizeUrl(url);
     if (seenUrls.has(normalized.toLowerCase())) continue;
     seenUrls.add(normalized.toLowerCase());
     urls.push(normalized);

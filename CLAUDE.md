@@ -1,4 +1,4 @@
-# adzuna-scraper — Actor Template (Direct API)
+# linkedin-jobs-scraper — Actor Notes (Direct API)
 
 ## Template version: v4 (2026-03-29)
 
@@ -14,23 +14,18 @@ Key files to customize:
 - `src/types.ts` — output fields, input fields
 - `src/constants.ts` — SOURCE_NAME, COMPACT_FIELDS, concurrency settings
 
-## Parallel SERP Fetch (standard pattern)
+## SERP Fetch
 
-The template uses parallel SERP fetching by default:
+LinkedIn guest search does not expose an accurate `totalResults`, so this actor
+uses sequential offset pagination:
 
-1. **Page 1** fetched sequentially → discovers `totalResults`
-2. **Pages 2..N** calculated from `totalResults / pageSize`, capped by `maxResults`
-3. **Parallel fetch** in batches of `DEFAULTS.serpConcurrency` (default: 20)
-4. **Dedup** across all pages — duplicate IDs logged as warning
+1. Fetch offset `start=0`
+2. Continue while a full page is returned
+3. Stop at LinkedIn's hard cap or `maxResults` overfetch guard
+4. Dedup across all pages
 
-This pattern is 2-3x faster than sequential pagination for APIs with predictable `?page=N` or `?offset=N` params.
-
-**Requirements for parallel SERP:**
-- `searchJobs()` must return accurate `totalResults` (the total count of matching jobs)
-- `buildSearchUrl()` must produce correct URLs for any page number
-- API must support page-based pagination (not cursor-based)
-
-For cursor-based APIs, fall back to sequential by setting `serpConcurrency: 1`.
+Do not add parallel SERP fetching unless LinkedIn starts returning a reliable
+total count or another safe page discovery mechanism.
 
 ## Concurrency Benchmark (Step 4b)
 
@@ -54,7 +49,7 @@ Full incremental implementation included. Modules copied from `_lib/`:
 
 Flow: load prior state → acquire lock → SERP + detail → classify (NEW/UPDATED/UNCHANGED/EXPIRED) → emit filtered → save state → release lock.
 
-KV store name: `adzuna-scraper-state` (replaced by scaffold). Runtime guard throws if placeholder not replaced.
+KV store name: `linkedin-jobs-state`.
 
 CUSTOMIZE: Update `TrackedFields` in the incremental classification section of `main.ts` to include all fields relevant for change detection on your target site.
 

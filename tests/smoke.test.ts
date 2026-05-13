@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULTS, COMPACT_FIELDS, SOURCE_NAME, REGION_PRESETS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from '../src/constants.js';
-import { transformJob, buildContentHash } from '../src/transform.js';
+import { transformJob, buildContentHash, applyDescriptionMaxLength, mergeDetail } from '../src/transform.js';
 import type { ApiJob } from '../src/apiClient.js';
-import { classifyJob, detectRepostMatch, buildUpdatedState, findExpiredJobs } from '../src/incrementalState.js';
+import { classifyJob, detectRepostMatch, buildUpdatedState, findExpiredJobs, filterByEmissionPolicy } from '../src/incrementalState.js';
 import type { IncrementalState, ClassifiedRecord, JobStateEntry } from '../src/incrementalState.js';
 import { selectItemsToNotify } from '../src/notifications.js';
 import type { OutputItem } from '../src/types.js';
@@ -21,6 +21,29 @@ const MOCK_API_JOB: ApiJob = {
   isEasyApplyOnCard: false,
   postingBenefits: ['Be an early applicant'],
 };
+
+function baseOutputItem(changeType: OutputItem['changeType']): OutputItem {
+  return {
+    jobId: 'a'.repeat(64), linkedinJobId: '1', jobUrl: null, title: 't', company: null, companyUrl: null,
+    companyId: null, location: null, country: null, postedAt: null, applyUrl: null, applyType: null,
+    description: null, descriptionHtml: null, descriptionMarkdown: null,
+    aiSummary: null, skills: [],
+    seniorityLevel: null, employmentType: null, industry: null, jobFunction: null,
+    workplaceType: null, applicantCount: null, easyApply: null,
+    salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, salarySource: null, salaryIsPredicted: null,
+    companyLogo: null, companyDescription: null, companyEmployeeCount: null, companyWebsite: null, companyAddress: null,
+    contactName: null, recruiterName: null, recruiterUrl: null, recruiterTitle: null,
+    contactEmail: null, contactPhone: null,
+    companyLinkedIn: null, companySocialLinks: null,
+    applyEmail: null,
+    extractedEmails: [], extractedPhones: [], extractedUrls: [],
+    socialProfiles: { linkedin: [], twitter: [], instagram: [], facebook: [], youtube: [], tiktok: [], github: [], xing: [] },
+    changeType, firstSeenAt: null, lastSeenAt: null, previousSeenAt: null, expiredAt: null,
+    isRepost: null, repostOfId: null, repostDetectedAt: null,
+    scrapedAt: '2026-04-26T00:00:00.000Z', source: 'linkedin', language: null, contentHash: 'b'.repeat(64),
+    isPromoted: null, postingBenefits: null, trackingId: null,
+  };
+}
 
 describe('constants', () => {
   it('DEFAULTS sane', () => {
@@ -75,7 +98,7 @@ describe('transformJob', () => {
     expect(item.companyUrl).toBe('https://www.linkedin.com/company/acme');
     expect(item.companyId).toBe('acme');
     expect(item.location).toBe('Copenhagen, Capital Region of Denmark, Denmark');
-    expect(item.country).toBe('Denmark');  // last comma-segment passthrough
+    expect(item.country).toBe('DK');
     expect(item.postedAt).toBe('2026-04-20T00:00:00.000Z');
     expect(item.jobUrl).toBe('https://www.linkedin.com/jobs/view/4391930855');
     expect(item.applyUrl).toBe('https://www.linkedin.com/jobs/view/4391930855');
@@ -85,6 +108,8 @@ describe('transformJob', () => {
     expect(item.trackingId).toBe('abc==');
     expect(item.source).toBe('linkedin');
     expect(item.contentHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(item.aiSummary).toContain('Senior Software Engineer');
+    expect(item.skills).toEqual([]);
   });
 
   it('detail fields are null pre-enrichment', () => {
@@ -131,9 +156,34 @@ describe('transformJob', () => {
     expect(item.companyId).toBeNull();
   });
 
+  it('identifies parser skeletons as null results outside the push contract', () => {
+    const sparse: ApiJob = {
+      jobId: '999',
+      urn: 'urn:li:jobPosting:999',
+      title: null, company: null, companyUrl: null,
+      location: null, postedAtIso: null, jobUrl: null, trackingId: null,
+      isPromoted: false, isEasyApplyOnCard: false, postingBenefits: null,
+    };
+    const item = transformJob(sparse, scrapedAt);
+    expect(item.linkedinJobId).toBe('999');
+    expect([item.title, item.company, item.jobUrl, item.location].every((v) => v == null)).toBe(true);
+  });
+
   it('returns null postedAt for malformed datetime', () => {
     const item = transformJob({ ...MOCK_API_JOB, postedAtIso: 'not-a-date' }, scrapedAt);
     expect(item.postedAt).toBeNull();
+  });
+
+  it('normalizes country to ISO-2 or null', () => {
+    expect(transformJob({ ...MOCK_API_JOB, location: 'New York, NY, United States' }, scrapedAt).country).toBe('US');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Berlin, Deutschland' }, scrapedAt).country).toBe('DE');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Paris, Allemagne' }, scrapedAt).country).toBe('DE');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Algiers, Algeria' }, scrapedAt).country).toBe('DZ');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Ho Chi Minh City, Vietnam' }, scrapedAt).country).toBe('VN');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Madrid, España' }, scrapedAt).country).toBe('ES');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Stockholm, Sverige' }, scrapedAt).country).toBe('SE');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Remote, XX' }, scrapedAt).country).toBe('XX');
+    expect(transformJob({ ...MOCK_API_JOB, location: 'Remote, Atlantis' }, scrapedAt).country).toBeNull();
   });
 });
 
@@ -281,67 +331,91 @@ describe('incrementalState - snapshot lifecycle', () => {
 });
 
 describe('descriptionMaxLength truncation', () => {
-  // Mirrors the truncation logic in main.ts:
-  //   if (descriptionMaxLength > 0 && item.description.length > descriptionMaxLength)
-  //     item.description = item.description.slice(0, descriptionMaxLength);
-  function applyTruncation(description: string | null, max: number): string | null {
-    if (!description) return description;
-    if (max > 0 && description.length > max) return description.slice(0, max);
-    return description;
-  }
+  const itemWithDescription = (description: string | null): OutputItem => ({
+    ...baseOutputItem(null),
+    description,
+    contentHash: buildContentHash({ title: 't', company: null, location: null, postedAt: null, description }),
+  });
 
   it('truncates description longer than max', () => {
-    expect(applyTruncation('x'.repeat(500), 100)?.length).toBe(100);
+    const item = applyDescriptionMaxLength(itemWithDescription('x'.repeat(500)), 100);
+    expect(item.description?.length).toBe(100);
+    expect(item.descriptionMarkdown?.length).toBe(100);
   });
 
   it('does not touch description shorter than max', () => {
-    expect(applyTruncation('short', 100)).toBe('short');
+    expect(applyDescriptionMaxLength(itemWithDescription('short'), 100).description).toBe('short');
   });
 
   it('zero max disables truncation', () => {
-    expect(applyTruncation('x'.repeat(500), 0)?.length).toBe(500);
+    expect(applyDescriptionMaxLength(itemWithDescription('x'.repeat(500)), 0).description?.length).toBe(500);
   });
 
   it('null description survives untouched', () => {
-    expect(applyTruncation(null, 100)).toBeNull();
+    expect(applyDescriptionMaxLength(itemWithDescription(null), 100).description).toBeNull();
+  });
+});
+
+describe('skills and AI summary', () => {
+  it('derives deterministic skills and aiSummary from enriched detail', () => {
+    const base = transformJob({ ...MOCK_API_JOB, title: 'Senior TypeScript Engineer' }, '2026-04-26T00:00:00.000Z');
+    const item = mergeDetail(base, {
+      description: 'Build AWS services with TypeScript, React, PostgreSQL, and Docker. Work with product management.',
+      descriptionHtml: null,
+      seniorityLevel: null,
+      employmentType: null,
+      jobFunction: null,
+      industry: null,
+      workplaceType: null,
+      applicantCount: null,
+      postedRelative: null,
+    });
+    expect(item.skills).toEqual(['AWS', 'Docker', 'PostgreSQL', 'Product Management', 'React', 'TypeScript']);
+    expect(item.aiSummary).toContain('Senior TypeScript Engineer');
+    expect(item.aiSummary).toContain('Build AWS services');
+    expect(item.aiSummary!.length).toBeLessThanOrEqual(280);
+  });
+});
+
+describe('incrementalState - emission policy', () => {
+  const record = (changeType: ClassifiedRecord['changeType']): ClassifiedRecord => ({
+    jobId: changeType,
+    changeType,
+    contentHash: 'content',
+    trackedHash: 'tracked',
+    firstSeenAt: '2026-04-26T00:00:00.000Z',
+    lastSeenAt: '2026-04-26T00:00:00.000Z',
+    previousSeenAt: null,
+    expiredAt: changeType === 'EXPIRED' ? '2026-04-26T00:00:00.000Z' : null,
+  });
+  const records = ['NEW', 'UPDATED', 'REAPPEARED', 'UNCHANGED', 'EXPIRED'].map((c) => record(c as ClassifiedRecord['changeType']));
+
+  it('honors outputMode=new-only', () => {
+    expect(filterByEmissionPolicy(records, { outputMode: 'new-only', emitUnchanged: true, emitExpired: false }).map((r) => r.changeType))
+      .toEqual(['NEW', 'REAPPEARED']);
+  });
+
+  it('honors outputMode=changed-only', () => {
+    expect(filterByEmissionPolicy(records, { outputMode: 'changed-only', emitUnchanged: true, emitExpired: false }).map((r) => r.changeType))
+      .toEqual(['UPDATED']);
   });
 });
 
 describe('selectItemsToNotify', () => {
-  const baseItem = (changeType: OutputItem['changeType']): OutputItem => ({
-    jobId: 'a'.repeat(64), linkedinJobId: '1', jobUrl: null, title: 't', company: null, companyUrl: null,
-    companyId: null, location: null, country: null, postedAt: null, applyUrl: null, applyType: null,
-    description: null, descriptionHtml: null, descriptionMarkdown: null,
-    seniorityLevel: null, employmentType: null, industry: null, jobFunction: null,
-    workplaceType: null, applicantCount: null, easyApply: null,
-    salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, salarySource: null, salaryIsPredicted: null,
-    companyLogo: null, companyDescription: null, companyEmployeeCount: null, companyWebsite: null, companyAddress: null,
-    recruiterName: null, recruiterUrl: null, recruiterTitle: null,
-    contactEmail: null, contactPhone: null,
-    companyLinkedIn: null, companySocialLinks: null,
-    applyEmail: null,
-    extractedEmails: [], extractedPhones: [], extractedUrls: [],
-    socialProfiles: { linkedin: [], twitter: [], instagram: [], facebook: [], youtube: [], tiktok: [], github: [], xing: [] },
-    changeType, firstSeenAt: null, lastSeenAt: null, previousSeenAt: null, expiredAt: null,
-    isRepost: null, repostOfId: null, repostDetectedAt: null,
-    scrapedAt: '2026-04-26T00:00:00.000Z', source: 'linkedin', language: null, contentHash: 'b'.repeat(64),
-    isPromoted: null, postingBenefits: null, trackingId: null,
-  });
-
   it('returns all items when notifyOnlyChanges=false', () => {
-    const items = [baseItem('NEW'), baseItem('UNCHANGED'), baseItem('UPDATED')];
+    const items = [baseOutputItem('NEW'), baseOutputItem('UNCHANGED'), baseOutputItem('UPDATED')];
     expect(selectItemsToNotify(items, false, true)).toHaveLength(3);
   });
 
   it('filters to NEW+UPDATED when notifyOnlyChanges=true and incrementalMode=true', () => {
-    const items = [baseItem('NEW'), baseItem('UNCHANGED'), baseItem('UPDATED')];
+    const items = [baseOutputItem('NEW'), baseOutputItem('UNCHANGED'), baseOutputItem('UPDATED')];
     const r = selectItemsToNotify(items, true, true);
     expect(r).toHaveLength(2);
     expect(r.every((i) => i.changeType === 'NEW' || i.changeType === 'UPDATED')).toBe(true);
   });
 
   it('ignores notifyOnlyChanges when not in incrementalMode', () => {
-    const items = [baseItem(null), baseItem(null)];
+    const items = [baseOutputItem(null), baseOutputItem(null)];
     expect(selectItemsToNotify(items, true, false)).toHaveLength(2);
   });
 });

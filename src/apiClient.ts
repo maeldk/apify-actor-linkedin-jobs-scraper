@@ -342,7 +342,7 @@ export async function fetchRelatedJobs(
  * Fetch a single job detail page. Returns raw HTML (parsing happens in transform.ts).
  * Returns null on non-200 (e.g. job removed → 404).
  *
- * Stub for v0.5 — full field-extraction wired in detail enrichment milestone.
+ * Detail fetch helper used by enrichment; field extraction happens in detailParser.
  */
 export async function fetchJobDetail(
   jobId: string,

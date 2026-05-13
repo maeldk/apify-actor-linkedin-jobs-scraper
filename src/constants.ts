@@ -7,7 +7,6 @@ export const SOURCE_NAME = 'linkedin.com';
 export const DEFAULTS = {
   maxResults: 100,
   pageSize: 10,
-  serpConcurrency: 5,
   detailConcurrency: 3,
   interBatchDelayMs: 250,
   paginationHardCap: 1000,

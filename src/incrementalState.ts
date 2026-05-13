@@ -305,6 +305,7 @@ export function buildUpdatedState(
 // ── Emission policy ──────────────────────────────────────────────────────
 
 export interface EmissionPolicy {
+  outputMode?: 'all' | 'new-only' | 'changed-only';
   emitUnchanged: boolean;
   emitExpired: boolean;
 }
@@ -316,11 +317,12 @@ export function filterByEmissionPolicy(
   return classifications.filter(c => {
     switch (c.changeType) {
       case 'NEW':
-      case 'UPDATED':
       case 'REAPPEARED':
-        return true;
+        return !policy.outputMode || policy.outputMode === 'all' || policy.outputMode === 'new-only';
+      case 'UPDATED':
+        return !policy.outputMode || policy.outputMode === 'all' || policy.outputMode === 'changed-only';
       case 'UNCHANGED':
-        return policy.emitUnchanged;
+        return policy.outputMode === 'all' && policy.emitUnchanged;
       case 'EXPIRED':
         return policy.emitExpired;
     }

@@ -47,7 +47,7 @@ export interface Input {
   linkedinHost?: string;
   outputLanguage?: string;
 
-  // ── Incremental & state (per-stateKey scope, not per-query-fingerprint)
+  // ── Incremental & state
   incrementalMode?: boolean;
   stateKey?: string;
   outputMode?: 'all' | 'new-only' | 'changed-only';
@@ -55,7 +55,6 @@ export interface Input {
   emitExpired?: boolean;
   skipReposts?: boolean;
   enrichDetails?: boolean;
-  scopePerQuery?: boolean;
 
   // ── Discovery
   discoverRelated?: boolean;
@@ -120,7 +119,6 @@ export interface NormalizedInput {
   emitExpired: boolean;
   skipReposts: boolean;
   enrichDetails: boolean;
-  scopePerQuery: boolean;
 
   discoverRelated: boolean;
   relatedSeedCount: number;
@@ -152,7 +150,7 @@ export interface OutputItem {
 
   // Core
   jobId: string;
-  linkedinJobId: string;
+  linkedinJobId: string | null;
   jobUrl: string | null;
   title: string | null;
   company: string | null;
@@ -168,6 +166,8 @@ export interface OutputItem {
   description: string | null;
   descriptionHtml: string | null;
   descriptionMarkdown: string | null;
+  aiSummary: string | null;
+  skills: string[];
   seniorityLevel: string | null;
   employmentType: string | null;
   industry: string | null;
@@ -233,7 +233,7 @@ export interface OutputItem {
 
   // Run-level (cont.)
   language: string | null;
-  contentHash: string;
+  contentHash: string | null;
 
   // Card-level
   isPromoted: boolean | null;

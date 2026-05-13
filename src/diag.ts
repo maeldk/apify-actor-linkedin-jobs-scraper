@@ -85,7 +85,7 @@ export function userSafeError(internalCause: unknown, code: ErrCode): UserSafeEr
   return new UserSafeError(`[${code}] ${USER_FACING_MESSAGE}`, code, internalCause);
 }
 
-const SECRET_PATTERNS = /(?:cookie|cookies|password|secret|token|apikey|api_key|authcookie|sessionstate|storagestate|jwt|webhook|telegramchatid|whatsappaccesstoken)/i;
+const SECRET_PATTERNS = /(?:cookie|cookies|password|secret|token|apikey|api_key|authcookie|sessionstate|storagestate|jwt|webhook|whatsappaccesstoken)/i;
 export function sanitizeInputForDiag(input: unknown, depth = 0): unknown {
   if (input == null || typeof input !== 'object' || depth > 6) return input;
   if (Array.isArray(input)) return input.map(v => sanitizeInputForDiag(v, depth + 1));
@@ -160,7 +160,14 @@ export async function emit(input: EmitInput): Promise<void> {
   const meaning = input.code ? ERR[input.code] : input.type;
   log.debug(`[${input.code ?? input.type}]`);
 
-  if (input.code && input.code.startsWith(STATUS_PREFIX)) {
+  if (input.type === 'run.complete' && input.payload && typeof input.payload === 'object' && 'status' in input.payload) {
+    const status = (input.payload as { status?: unknown }).status;
+    try {
+      await Actor.setStatusMessage(status === 'success' ? 'Run completed' : `${input.code ?? 'Run failed'}`, { isStatusMessageTerminal: true });
+    } catch {
+      // ignore
+    }
+  } else if (input.code && input.code.startsWith(STATUS_PREFIX)) {
     try {
       await Actor.setStatusMessage(`${input.code}`, { isStatusMessageTerminal: false });
     } catch {

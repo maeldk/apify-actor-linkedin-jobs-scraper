@@ -1,0 +1,24 @@
+import { describe, expect, it } from 'vitest';
+import { sanitizeInputForDiag, userSafeError } from '../src/diag.js';
+
+describe('diag', () => {
+  it('redacts secret-looking input fields recursively', () => {
+    const sanitized = sanitizeInputForDiag({
+      keywords: 'engineer',
+      telegramToken: 'abc123',
+      nested: { webhookUrl: 'https://example.com/hook', normal: 'ok' },
+    });
+    expect(sanitized).toEqual({
+      keywords: 'engineer',
+      telegramToken: '[redacted:6c]',
+      nested: { webhookUrl: '[redacted:24c]', normal: 'ok' },
+    });
+  });
+
+  it('wraps internal causes in an opaque user-safe error', () => {
+    const err = userSafeError(new Error('HTTP 500 with body'), 'LIN-2010');
+    expect(err.message).toContain('[LIN-2010]');
+    expect(err.message).not.toContain('HTTP 500');
+    expect(err.code).toBe('LIN-2010');
+  });
+});

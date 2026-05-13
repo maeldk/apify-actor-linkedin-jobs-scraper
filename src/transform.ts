@@ -6,8 +6,6 @@ import { createHash } from 'node:crypto';
 import { extractPhones as extractPhonesLib, type PhoneExtractionMode } from './phoneExtractor.js';
 import { extractUrls } from './urlExtractor.js';
 
-const PROFILE_HOST_RE = /^(?:[a-z]{2,3}\.)?linkedin\.com$/i;
-
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+/g;
 const URL_RE = /https?:\/\/[^\s<>"'()]+/gi;
 const SOCIAL_HOST_RE = /(?:linkedin\.com|twitter\.com|x\.com|facebook\.com|instagram\.com|youtube\.com|tiktok\.com|github\.com|xing\.com)/i;
@@ -17,6 +15,136 @@ const EMAIL_NOISE_DOMAINS = new Set([
   'linkedin.com', 'example.com', 'test.com',
 ]);
 const EMAIL_NOISE_TLDS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'css', 'js']);
+const SKILL_TERMS = [
+  'aws', 'azure', 'gcp', 'kubernetes', 'docker', 'terraform', 'ansible',
+  'javascript', 'typescript', 'node.js', 'nodejs', 'react', 'vue', 'angular',
+  'python', 'django', 'flask', 'java', 'spring', 'kotlin', 'scala',
+  'c#', '.net', 'go', 'golang', 'rust', 'php', 'laravel', 'ruby', 'rails',
+  'sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch',
+  'snowflake', 'databricks', 'spark', 'airflow', 'dbt',
+  'machine learning', 'ml', 'ai', 'nlp', 'llm', 'data science',
+  'excel', 'power bi', 'tableau', 'looker',
+  'salesforce', 'hubspot', 'sap', 'servicenow',
+  'figma', 'ux', 'ui', 'seo', 'sem', 'ga4',
+  'agile', 'scrum', 'kanban', 'product management', 'project management',
+];
+const COUNTRY_NAME_TO_ISO2: Record<string, string> = {
+  'argentina': 'AR',
+  'argentine': 'AR',
+  'argentína': 'AR',
+  'algeria': 'DZ',
+  'algerie': 'DZ',
+  'algérie': 'DZ',
+  'australia': 'AU',
+  'austria': 'AT',
+  'autriche': 'AT',
+  'österreich': 'AT',
+  'bahrain': 'BH',
+  'belgium': 'BE',
+  'belgique': 'BE',
+  'bolivia': 'BO',
+  'brazil': 'BR',
+  'brasil': 'BR',
+  'brunei': 'BN',
+  'bulgaria': 'BG',
+  'cambodia': 'KH',
+  'canada': 'CA',
+  'chile': 'CL',
+  'colombia': 'CO',
+  'colombie': 'CO',
+  'costa rica': 'CR',
+  'croatia': 'HR',
+  'cyprus': 'CY',
+  'czech republic': 'CZ',
+  'czechia': 'CZ',
+  'denmark': 'DK',
+  'danmark': 'DK',
+  'danemark': 'DK',
+  'dominican republic': 'DO',
+  'ecuador': 'EC',
+  'egypt': 'EG',
+  'estonia': 'EE',
+  'finland': 'FI',
+  'france': 'FR',
+  'frankrig': 'FR',
+  'frankreich': 'FR',
+  'germany': 'DE',
+  'allemagne': 'DE',
+  'deutschland': 'DE',
+  'tyskland': 'DE',
+  'greece': 'GR',
+  'grèce': 'GR',
+  'grecia': 'GR',
+  'guatemala': 'GT',
+  'guyana': 'GY',
+  'hungary': 'HU',
+  'iceland': 'IS',
+  'india': 'IN',
+  'indonesia': 'ID',
+  'ireland': 'IE',
+  'irlande': 'IE',
+  'israel': 'IL',
+  'italy': 'IT',
+  'italia': 'IT',
+  'italie': 'IT',
+  'jamaica': 'JM',
+  'japan': 'JP',
+  'jordan': 'JO',
+  'kuwait': 'KW',
+  'laos': 'LA',
+  'latvia': 'LV',
+  'lebanon': 'LB',
+  'lithuania': 'LT',
+  'luxembourg': 'LU',
+  'malaysia': 'MY',
+  'malta': 'MT',
+  'mexico': 'MX',
+  'méxico': 'MX',
+  'morocco': 'MA',
+  'maroc': 'MA',
+  'myanmar': 'MM',
+  'netherlands': 'NL',
+  'nederland': 'NL',
+  'pays-bas': 'NL',
+  'new zealand': 'NZ',
+  'norway': 'NO',
+  'norge': 'NO',
+  'oman': 'OM',
+  'panama': 'PA',
+  'paraguay': 'PY',
+  'peru': 'PE',
+  'philippines': 'PH',
+  'poland': 'PL',
+  'pologne': 'PL',
+  'portugal': 'PT',
+  'puerto rico': 'PR',
+  'qatar': 'QA',
+  'romania': 'RO',
+  'saudi arabia': 'SA',
+  'singapore': 'SG',
+  'slovakia': 'SK',
+  'slovenia': 'SI',
+  'spain': 'ES',
+  'españa': 'ES',
+  'espagne': 'ES',
+  'sweden': 'SE',
+  'sverige': 'SE',
+  'suède': 'SE',
+  'switzerland': 'CH',
+  'schweiz': 'CH',
+  'suisse': 'CH',
+  'thailand': 'TH',
+  'tunisia': 'TN',
+  'uruguay': 'UY',
+  'united arab emirates': 'AE',
+  'united kingdom': 'GB',
+  'uk': 'GB',
+  'united states': 'US',
+  'united states of america': 'US',
+  'usa': 'US',
+  'venezuela': 'VE',
+  'vietnam': 'VN',
+};
 
 /** Delegate to the canonical _lib phone extractor (multilingual, strict/lenient modes). */
 export function extractPhones(text: string | null | undefined, mode: PhoneExtractionMode = 'strict'): string[] {
@@ -112,9 +240,75 @@ function inferCountryFromLocation(location: string | null): string | null {
   if (!location) return null;
   const tail = location.split(',').pop()?.trim();
   if (!tail) return null;
-  // Two-letter codes pass through; full names left as-is for downstream consumers.
-  if (/^[A-Z]{2}$/.test(tail)) return tail;
-  return tail;
+  if (/^[A-Z]{2}$/i.test(tail)) return tail.toUpperCase();
+  return COUNTRY_NAME_TO_ISO2[tail.toLowerCase()] ?? null;
+}
+
+function normalizeSkillLabel(skill: string): string {
+  const aliases: Record<string, string> = {
+    'aws': 'AWS',
+    'gcp': 'GCP',
+    'sql': 'SQL',
+    'c#': 'C#',
+    '.net': '.NET',
+    'nodejs': 'Node.js',
+    'node.js': 'Node.js',
+    'typescript': 'TypeScript',
+    'javascript': 'JavaScript',
+    'postgresql': 'PostgreSQL',
+    'mysql': 'MySQL',
+    'golang': 'Go',
+    'ml': 'Machine Learning',
+    'ai': 'AI',
+    'nlp': 'NLP',
+    'llm': 'LLM',
+    'ux': 'UX',
+    'ui': 'UI',
+    'seo': 'SEO',
+    'sem': 'SEM',
+    'ga4': 'GA4',
+    'dbt': 'dbt',
+  };
+  return aliases[skill] ?? skill.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function extractSkills(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const normalized = ` ${text.toLowerCase().replace(/[^a-z0-9+#.]+/g, ' ')} `;
+  const out: string[] = [];
+  for (const skill of SKILL_TERMS) {
+    const escaped = skill.split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    if (new RegExp(`(^|\\s)${escaped}(?=[\\s.,;:!?)]|$)`, 'i').test(normalized)) out.push(normalizeSkillLabel(skill));
+  }
+  return Array.from(new Set(out)).sort((a, b) => a.localeCompare(b));
+}
+
+function buildAiSummary(item: Pick<OutputItem, 'title' | 'company' | 'location' | 'description'>): string | null {
+  const bits = [item.title, item.company, item.location].filter(Boolean).join(' · ');
+  const firstSentence = item.description
+    ?.replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.!?])\s+/)[0]
+    ?.replace(/^[-•·–]\s*/, '');
+  const summary = [bits, firstSentence].filter(Boolean).join(' — ');
+  return summary ? summary.slice(0, 280) : null;
+}
+
+export function applyDescriptionMaxLength(item: OutputItem, maxLength: number): OutputItem {
+  if (maxLength <= 0 || !item.description || item.description.length <= maxLength) return item;
+  const description = item.description.slice(0, maxLength);
+  return {
+    ...item,
+    description,
+    descriptionMarkdown: descriptionToMarkdown(description),
+    contentHash: buildContentHash({
+      title: item.title,
+      company: item.company,
+      location: item.location,
+      postedAt: item.postedAt,
+      description,
+    }),
+  };
 }
 
 function descriptionToMarkdown(text: string | null): string | null {
@@ -144,6 +338,7 @@ function descriptionToMarkdown(text: string | null): string | null {
 export function mergeDetail(item: OutputItem, detail: ParsedDetail, phoneMode: PhoneExtractionMode = 'strict'): OutputItem {
   const description = detail.description ?? item.description;
   const descriptionHtml = detail.descriptionHtml ?? item.descriptionHtml;
+  // Plain-text extraction catches visible contact data; extractUrls handles URL classification separately.
   const emails = Array.from(new Set([...item.extractedEmails, ...extractEmails(description), ...extractEmails(descriptionHtml)]));
   const phones = Array.from(new Set([...item.extractedPhones, ...extractPhones(description, phoneMode)]));
   const socials = Array.from(new Set([...(item.companySocialLinks ?? []), ...extractSocialLinks(descriptionHtml)]));
@@ -165,6 +360,8 @@ export function mergeDetail(item: OutputItem, detail: ParsedDetail, phoneMode: P
     description,
     descriptionHtml,
     descriptionMarkdown: descriptionToMarkdown(description),
+    aiSummary: buildAiSummary({ ...item, description }),
+    skills: Array.from(new Set([...item.skills, ...extractSkills(`${item.title ?? ''}\n${description ?? ''}\n${detail.seniorityLevel ?? ''}\n${detail.employmentType ?? ''}\n${detail.industry ?? ''}\n${detail.jobFunction ?? ''}`)])).sort((a, b) => a.localeCompare(b)),
     extractedEmails: emails,
     extractedPhones: phones,
     extractedUrls: mergedUrls,
@@ -250,6 +447,8 @@ export function transformJob(apiJob: ApiJob, scrapedAt: string): OutputItem {
     description: null,
     descriptionHtml: null,
     descriptionMarkdown: null,
+    aiSummary: buildAiSummary({ title: apiJob.title, company: apiJob.company, location: apiJob.location, description: null }),
+    skills: extractSkills(apiJob.title),
     seniorityLevel: null,
     employmentType: null,
     industry: null,
@@ -310,6 +509,3 @@ export function transformJob(apiJob: ApiJob, scrapedAt: string): OutputItem {
     trackingId: apiJob.trackingId,
   };
 }
-
-// Suppress unused-import warning for code that may reference PROFILE_HOST_RE elsewhere.
-void PROFILE_HOST_RE;

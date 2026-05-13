@@ -3,7 +3,7 @@ import type { Input, NormalizedInput, OutputItem } from './types.js';
 import { DEFAULTS, COMPACT_FIELDS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from './constants.js';
 import { searchJobs, fetchJobDetail, fetchRelatedJobs, type SearchParams } from './apiClient.js';
 import type { ApiJob } from './apiClient.js';
-import { transformJob, mergeDetail } from './transform.js';
+import { transformJob, mergeDetail, applyDescriptionMaxLength } from './transform.js';
 import { parseDetail } from './detailParser.js';
 import {
     type IncrementalState, type ClassifiedRecord, type TrackedFields,
@@ -15,6 +15,8 @@ import { buildStateKey } from './buildStateKey.js';
 import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, type RunMetadata } from './notifications.js';
 import { logRunFooter } from './runFooter.js';
 import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
+import { resolveRegions } from './regionResolver.js';
+import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost } from './inputNormalize.js';
 
 function classifyFallbackErrCode(internalCause: unknown, fallback: ErrCode): ErrCode {
   if (fallback !== 'LIN-9000') return fallback;
@@ -23,7 +25,7 @@ function classifyFallbackErrCode(internalCause: unknown, fallback: ErrCode): Err
   if (/\b(429|rate.?limit|too many requests)\b/i.test(text)) return 'LIN-2030';
   if (/\b(403|401|unauthori[sz]ed|forbidden|blocked|waf|cloudflare|akamai|challenge|captcha)\b/i.test(text)) return 'LIN-2030';
   if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b5\d{2}\b/.test(text)) return 'LIN-2010';
-  if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b[1-5]\d{2}\b/.test(text)) return 'LIN-2010';
+  if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b[4-5]\d{2}\b/.test(text)) return 'LIN-2010';
   if (/\b(unexpected|invalid|parse|json|shape|missing|endpoint may have changed|structure)\b/i.test(text)) return 'LIN-3001';
   if (/\b(timeout|timed out|econnreset|econnrefused|enotfound|network|socket|fetch failed|abort)\b/i.test(text)) return 'LIN-2001';
   if (/\b(lock lost|state lock lost)\b/i.test(msg)) return 'LIN-4001';
@@ -41,75 +43,8 @@ async function failWith(internalCause: unknown, code: ErrCode, runStartTs: numbe
   await Actor.fail(safeMsg);
   throw new Error(safeMsg);
 }
-import { resolveRegions } from './regionResolver.js';
 
 const STATE_STORE = 'linkedin-jobs-state';
-
-function normalizeInput(raw: Partial<Input>): NormalizedInput {
-  return {
-    keywords: (raw.keywords ?? '').trim(),
-    location: raw.location?.trim() || undefined,
-    geoIds: Array.isArray(raw.geoIds) ? raw.geoIds.filter(Boolean) : [],
-    regions: Array.isArray(raw.regions) ? raw.regions.filter(Boolean) : [],
-    regionPresets: raw.regionPresets ?? undefined,
-
-    datePosted: raw.datePosted ?? 'anytime',
-    jobType: raw.jobType ?? [],
-    experienceLevel: raw.experienceLevel ?? [],
-    workType: raw.workType ?? [],
-
-    salaryMin: raw.salaryMin ?? undefined,
-    salaryMax: raw.salaryMax ?? undefined,
-    salaryIncludeUnknown: raw.salaryIncludeUnknown ?? true,
-
-    companies: Array.isArray(raw.companies) ? raw.companies.filter(Boolean) : [],
-    excludeCompanies: Array.isArray(raw.excludeCompanies) ? raw.excludeCompanies.filter(Boolean) : [],
-    excludeKeywords: Array.isArray(raw.excludeKeywords) ? raw.excludeKeywords.filter(Boolean) : [],
-
-    easyApply: raw.easyApply ?? false,
-    removeAgency: raw.removeAgency ?? false,
-    distance: raw.distance ?? undefined,
-    sortBy: raw.sortBy ?? 'recent',
-
-    startUrls: Array.isArray(raw.startUrls)
-      ? raw.startUrls.map((u) => u?.url).filter((u): u is string => typeof u === 'string' && u.length > 0)
-      : [],
-
-    proxyConfiguration: raw.proxyConfiguration ?? { useApifyProxy: true, apifyProxyGroups: ['DATACENTER'] },
-
-    linkedinHost: raw.linkedinHost ?? DEFAULTS.defaultLinkedinHost,
-    outputLanguage: raw.outputLanguage ?? DEFAULTS.defaultOutputLanguage,
-
-    incrementalMode: raw.incrementalMode ?? false,
-    stateKey: raw.stateKey ?? null,
-    outputMode: raw.outputMode ?? 'all',
-    emitUnchanged: raw.emitUnchanged ?? false,
-    emitExpired: raw.emitExpired ?? false,
-    skipReposts: raw.skipReposts ?? false,
-    enrichDetails: raw.enrichDetails ?? false,
-    scopePerQuery: raw.scopePerQuery ?? false,
-
-    discoverRelated: raw.discoverRelated ?? false,
-    relatedSeedCount: Math.max(0, raw.relatedSeedCount ?? 5),
-
-    telegramToken: raw.telegramToken ?? null,
-    telegramChatId: raw.telegramChatId ?? null,
-    discordWebhookUrl: raw.discordWebhookUrl ?? null,
-    slackWebhookUrl: raw.slackWebhookUrl ?? null,
-    whatsappAccessToken: raw.whatsappAccessToken ?? null,
-    whatsappPhoneNumberId: raw.whatsappPhoneNumberId ?? null,
-    whatsappTo: raw.whatsappTo ?? null,
-    webhookUrl: raw.webhookUrl ?? null,
-    webhookHeaders: raw.webhookHeaders ?? null,
-    notificationLimit: raw.notificationLimit ?? 5,
-    notifyOnlyChanges: raw.notifyOnlyChanges ?? false,
-
-    compact: raw.compact ?? false,
-    descriptionMaxLength: raw.descriptionMaxLength ?? 0,
-    phoneExtractionMode: raw.phoneExtractionMode ?? 'strict',
-    maxResults: raw.maxResults ?? DEFAULTS.maxResults,
-  };
-}
 
 /** Strip known tracking params + sort remaining params; lowercase host. */
 function canonicalizeUrl(raw: string): string {
@@ -130,8 +65,101 @@ function canonicalizeUrl(raw: string): string {
 }
 
 interface QuerySpec {
-  label: string;
   params: SearchParams;
+}
+
+const TPR_REVERSE: Record<string, NonNullable<SearchParams['datePosted']>> = {
+  r3600: 'lastHour',
+  r86400: 'last24h',
+  r604800: 'last7d',
+  r2592000: 'last30d',
+};
+const WT_REVERSE: Record<string, NonNullable<SearchParams['workType']>[number]> = { '1': 'onsite', '2': 'remote', '3': 'hybrid' };
+const E_REVERSE: Record<string, NonNullable<SearchParams['experienceLevel']>[number]> = {
+  '1': 'internship', '2': 'entry', '3': 'associate', '4': 'mid_senior', '5': 'director', '6': 'executive',
+};
+const JT_REVERSE: Record<string, NonNullable<SearchParams['jobType']>[number]> = {
+  F: 'fulltime', P: 'parttime', C: 'contract', T: 'temporary', I: 'internship', V: 'volunteer', O: 'other',
+};
+const SB2_REVERSE: Record<string, number> = {
+  '1': 40_000, '2': 60_000, '3': 80_000, '4': 100_000, '5': 120_000, '6': 140_000, '7': 160_000,
+};
+
+function csvParam<T extends string>(raw: string | null, map: Record<string, T>): T[] | undefined {
+  if (!raw) return undefined;
+  const seen = new Set<T>();
+  const values: T[] = [];
+  for (const part of raw.split(',')) {
+    const value = map[part.trim()];
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    values.push(value);
+  }
+  return values.length ? values : undefined;
+}
+
+function parseStartUrl(raw: string, input: NormalizedInput): SearchParams {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new UserSafeError('[LIN-1001] startUrls must contain valid LinkedIn job search URLs.', 'LIN-1001', null);
+  }
+  if (!/(^|\.)linkedin\.com$/i.test(url.hostname)) {
+    throw new UserSafeError('[LIN-1001] startUrls must be LinkedIn job search URLs.', 'LIN-1001', null);
+  }
+  if (!/\/jobs\/search/i.test(url.pathname) && !/\/jobs-guest\/jobs\/api\/seeMoreJobPostings\/search/i.test(url.pathname)) {
+    throw new UserSafeError('[LIN-1001] Only LinkedIn job search URLs are supported in startUrls.', 'LIN-1001', null);
+  }
+  const p = url.searchParams;
+  const distance = p.get('distance');
+  const parsedDistance = distance != null ? Number(distance) : undefined;
+  const salaryMin = p.get('f_SB2');
+  const companies = cleanNumericList(p.get('f_C')?.split(',') ?? []);
+  return {
+    keywords: cleanString(p.get('keywords')) ?? (input.keywords || undefined),
+    location: cleanString(p.get('location')) ?? input.location,
+    geoId: cleanNumericList([p.get('geoId')])[0],
+    distance: parsedDistance != null && Number.isFinite(parsedDistance) ? parsedDistance : input.distance,
+    datePosted: TPR_REVERSE[p.get('f_TPR') ?? ''] ?? input.datePosted,
+    workType: csvParam(p.get('f_WT'), WT_REVERSE) ?? (input.workType.length ? input.workType : undefined),
+    experienceLevel: csvParam(p.get('f_E'), E_REVERSE) ?? (input.experienceLevel.length ? input.experienceLevel : undefined),
+    jobType: csvParam(p.get('f_JT'), JT_REVERSE) ?? (input.jobType.length ? input.jobType : undefined),
+    companies: companies.length ? companies : (input.companies.length ? input.companies : undefined),
+    salaryMin: salaryMin != null ? SB2_REVERSE[salaryMin] : input.salaryMin,
+    easyApply: p.get('f_AL') === 'true' || input.easyApply || undefined,
+    sortBy: p.get('sortBy') === 'R' ? 'relevant' : input.sortBy,
+    linkedinHost: normalizeLinkedinHost(url.hostname),
+    outputLanguage: input.outputLanguage,
+  };
+}
+
+function buildStateKeyDimensions(input: NormalizedInput): Record<string, unknown> {
+  return {
+    geoIds: input.geoIds,
+    regions: input.regions,
+    regionPresets: input.regionPresets,
+    datePosted: input.datePosted,
+    jobType: input.jobType,
+    experienceLevel: input.experienceLevel,
+    workType: input.workType,
+    salaryMin: input.salaryMin,
+    salaryMax: input.salaryMax,
+    salaryIncludeUnknown: input.salaryIncludeUnknown,
+    companies: input.companies,
+    excludeCompanies: input.excludeCompanies,
+    excludeKeywords: input.excludeKeywords,
+    easyApply: input.easyApply,
+    removeAgency: input.removeAgency,
+    distance: input.distance,
+    sortBy: input.sortBy,
+    linkedinHost: input.linkedinHost,
+    outputLanguage: input.outputLanguage,
+    discoverRelated: input.discoverRelated,
+    relatedSeedCount: input.relatedSeedCount,
+    enrichDetails: input.enrichDetails,
+    startUrls: input.startUrls.map(canonicalizeUrl),
+  };
 }
 
 function expandGeoIds(input: NormalizedInput): { geoIds: string[]; unresolved: string[] } {
@@ -161,6 +189,11 @@ function buildQueries(input: NormalizedInput): QuerySpec[] {
   };
 
   const queries: QuerySpec[] = [];
+  if (input.startUrls.length) {
+    for (const url of input.startUrls) queries.push({ params: parseStartUrl(url, input) });
+    return queries;
+  }
+
   const { geoIds, unresolved } = expandGeoIds(input);
   if (unresolved.length > 0) {
     // Caller (main()) logs once before queries run, but re-emit here for buildQueries-only use.
@@ -169,13 +202,11 @@ function buildQueries(input: NormalizedInput): QuerySpec[] {
   if (geoIds.length) {
     for (const geoId of geoIds) {
       queries.push({
-        label: `kw="${input.keywords}" geoId=${geoId}`,
         params: { ...baseFilters, keywords: input.keywords || undefined, geoId },
       });
     }
   } else {
     queries.push({
-      label: `kw="${input.keywords}"${input.location ? ` loc="${input.location}"` : ''}`,
       params: { ...baseFilters, keywords: input.keywords || undefined, location: input.location },
     });
   }
@@ -209,6 +240,10 @@ function withinSalaryFilter(item: OutputItem, input: NormalizedInput): boolean {
   return true;
 }
 
+function isMeaningfulResult(item: OutputItem): boolean {
+  return Boolean(item.linkedinJobId && (item.title || item.company || item.jobUrl || item.location));
+}
+
 async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: string | undefined): Promise<ApiJob[]> {
   const seen = new Set<string>();
   const out: ApiJob[] = [];
@@ -231,7 +266,7 @@ async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: strin
     if (maxResultsHint > 0 && out.length >= maxResultsHint * 1.5) break;
     start += DEFAULTS.pageSize;
   }
-  log.info(`Query [${spec.label}]: ${out.length} unique cards from start=0..${start}`);
+  log.info(`Fetched ${out.length} jobs for one search.`);
   return out;
 }
 
@@ -249,7 +284,7 @@ async function main() {
 
   const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
   if (nodeMajor >= 24) {
-    log.error('Requires Node 20 or 22.');
+    log.error('Requires Node 22.');
     process.exitCode = 1;
     await Actor.exit();
     return;
@@ -259,41 +294,13 @@ async function main() {
   await emit({ type: 'run.start', payload: { input: sanitizeInputForDiag(rawInput) } });
   const input = normalizeInput(rawInput ?? {});
 
-  // Auto-derive stateKey when not explicitly set: fingerprint search inputs so
-
-
-  // multi-URL/multi-filter runs don't share state across unrelated universes.
-
-
   if (input.incrementalMode && !input.stateKey) {
-
-
     input.stateKey = buildStateKey({
-
-
       keyword: input.keywords || null,
-
-
       location: input.location ?? null,
-
-
-        dimensions: {
-
-
-          startUrls: input.startUrls,
-
-
-        },
-
-
-  
-
+      dimensions: buildStateKeyDimensions(input),
     });
-
-
-    log.info(`Auto-derived stateKey: ${input.stateKey}`);
-
-
+    log.debug(`Auto-derived stateKey: ${input.stateKey}`);
   }
   if (!input.keywords && !input.geoIds.length && !input.regions.length && !input.regionPresets && !input.location && !input.startUrls.length) {
     await failWith(new Error('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.'), 'LIN-1001', runStartTs, 0, 0);
@@ -307,14 +314,6 @@ async function main() {
       log.info(`Expanded ${expanded.geoIds.length - input.geoIds.length} region/preset code(s) → geoIds`);
     }
   }
-  if (input.startUrls.length) {
-    log.warning(`startUrls[] received but advanced URL parsing is deferred to v0.5; ${input.startUrls.length} URLs ignored for v0.1 PoC.`);
-    // Canonicalize for future state-fingerprint stability — validates URLs early.
-    for (const u of input.startUrls) canonicalizeUrl(u);
-  }
-
-  const scrapedAt = new Date().toISOString();
-
   // ── Load prior incremental state ────────────────────────────────────
   let priorState: IncrementalState | null = null;
   let kvStore: Awaited<ReturnType<typeof Actor.openKeyValueStore>> | null = null;
@@ -324,7 +323,7 @@ async function main() {
     const raw = await kvStore.getValue<IncrementalState>(key);
     if (raw && raw.version === 1 && raw.stateKey === input.stateKey) {
       priorState = raw;
-      log.info(`Loaded prior state: ${Object.values(raw.jobs).filter((j) => j.active).length} active jobs`);
+      log.debug(`Loaded prior state: ${Object.values(raw.jobs).filter((j) => j.active).length} active jobs`);
     }
     const lockKey = lockKvKey(input.stateKey);
     const existingLock = await kvStore.getValue<StateLock>(lockKey);
@@ -346,6 +345,8 @@ async function main() {
     }
   };
 
+  const scrapedAt = new Date().toISOString();
+
   try {
     const queries = buildQueries(input);
     log.info(`Running ${queries.length} ${queries.length === 1 ? 'query' : 'queries'}`);
@@ -356,7 +357,7 @@ async function main() {
       try {
         const cfg = await Actor.createProxyConfiguration(input.proxyConfiguration ?? { groups: ['DATACENTER'] });
         proxyUrl = await cfg?.newUrl();
-        if (proxyUrl) log.info(`Using Apify Proxy (${input.proxyConfiguration?.apifyProxyGroups?.join(',') ?? 'DATACENTER'})`);
+        if (proxyUrl) log.info('Using configured proxy.');
       } catch (e) {
         log.warning(`Could not create Apify Proxy configuration: ${e instanceof Error ? e.message : e}`);
       }
@@ -373,12 +374,12 @@ async function main() {
       }
     }
 
-    log.info(`Cross-query unique: ${allJobs.length} jobs`);
+    log.info(`Fetched ${allJobs.length} unique jobs.`);
 
-    // ── Optional discovery via /relatedJobs (v0.8) ──────────────────────
+    // ── Optional result expansion ───────────────────────────────────────
     if (input.discoverRelated && allJobs.length > 0 && input.relatedSeedCount > 0) {
       const seeds = allJobs.slice(0, input.relatedSeedCount);
-      log.info(`Discovery: fetching relatedJobs for ${seeds.length} seed(s) (concurrency=${DEFAULTS.detailConcurrency})`);
+      log.info('Expanding results.');
       let added = 0;
       const queue = [...seeds];
       const workers = Array.from({ length: DEFAULTS.detailConcurrency }, async () => {
@@ -403,10 +404,10 @@ async function main() {
         }
       });
       await Promise.all(workers);
-      log.info(`Discovery: +${added} new jobs from relatedJobs (total now ${allJobs.length})`);
+      log.info(`Expanded results: ${added} additional jobs.`);
     }
 
-    let items = allJobs.map((j) => transformJob(j, scrapedAt));
+    let items = allJobs.map((j) => transformJob(j, scrapedAt)).filter(isMeaningfulResult);
     if (input.removeAgency) items = items.filter((it) => !matchesAgency(it.company));
     items = items.filter((it) => !matchesExcluded(it, input));
     items = items.filter((it) => withinSalaryFilter(it, input));
@@ -416,7 +417,7 @@ async function main() {
       const enrichTarget = input.maxResults > 0
         ? items.slice(0, Math.min(items.length, input.maxResults))
         : items;
-      log.info(`Enriching ${enrichTarget.length} item(s) with detail pages (concurrency=${DEFAULTS.detailConcurrency})`);
+      log.info(`Enriching ${enrichTarget.length} item(s).`);
       let enriched = 0;
       let failed = 0;
       const queue = [...enrichTarget.entries()];
@@ -425,6 +426,10 @@ async function main() {
           const next = queue.shift();
           if (!next) break;
           const [idx, item] = next;
+          if (!item.linkedinJobId) {
+            failed++;
+            continue;
+          }
           try {
             const html = await fetchJobDetail(item.linkedinJobId, {
               proxyUrl,
@@ -472,10 +477,10 @@ async function main() {
       classifications.push(...expired);
 
       const toEmit = filterByEmissionPolicy(classifications, {
+        outputMode: input.outputMode,
         emitUnchanged: input.emitUnchanged,
         emitExpired: input.emitExpired,
       });
-      const classMap = new Map(toEmit.map((c) => [c.jobId, c]));
 
       // Snapshot map: captured for new state so EXPIRED items can be re-emitted on later runs.
       const snapshots = new Map<string, NonNullable<import('./incrementalState.js').JobStateEntry['snapshot']>>();
@@ -521,7 +526,8 @@ async function main() {
           repostOfId: repostMatch?.jobId ?? null,
           repostDetectedAt: repostMatch ? scrapedAt : null,
         };
-        toPush.push(input.compact ? filterCompact(finalItem) : finalItem);
+        const outputItem = applyDescriptionMaxLength(finalItem, input.descriptionMaxLength);
+        toPush.push(input.compact ? filterCompact(outputItem) : outputItem);
         activeEmitted++;
       }
 
@@ -547,29 +553,34 @@ async function main() {
         unchangedSkipped,
         pricePerResult: DEFAULTS.pricePerResult,
       });
-      return;
-    }
+      emittedCount = toPush.length;
+    } else {
 
-    // ── Non-incremental push ─────────────────────────────────────────────
-    const toPush: Record<string, unknown>[] = [];
-    for (const item of items) {
-      if (input.maxResults > 0 && toPush.length >= input.maxResults) break;
-      toPush.push(input.compact ? filterCompact(item) : item);
-    }
+      // ── Non-incremental push ─────────────────────────────────────────────
+      const toPush: Record<string, unknown>[] = [];
+      for (const item of items) {
+        if (input.maxResults > 0 && toPush.length >= input.maxResults) break;
+        const outputItem = applyDescriptionMaxLength(item, input.descriptionMaxLength);
+        toPush.push(input.compact ? filterCompact(outputItem) : outputItem);
+      }
 
-    if (toPush.length > 0) {
-      await Actor.pushData(toPush);
-      try { await Actor.charge({ eventName: 'apify-default-dataset-item', count: toPush.length }); } catch {}
-    }
+      if (toPush.length > 0) {
+        await Actor.pushData(toPush);
+        try { await Actor.charge({ eventName: 'apify-default-dataset-item', count: toPush.length }); } catch {}
+      }
 
-    log.info(`Done. Pushed ${toPush.length} items.`);
-    await dispatchNotifications(input, toPush as unknown as OutputItem[], scrapedAt);
-    logRunFooter({
-      actorSlug: 'blackfalcondata/linkedin-jobs-scraper',
-      emitted: toPush.length,
-      pricePerResult: DEFAULTS.pricePerResult,
-    });
-    emittedCount = toPush.length;
+      log.info(`Done. Pushed ${toPush.length} items.`);
+      await dispatchNotifications(input, toPush as unknown as OutputItem[], scrapedAt);
+      logRunFooter({
+        actorSlug: 'blackfalcondata/linkedin-jobs-scraper',
+        emitted: toPush.length,
+        pricePerResult: DEFAULTS.pricePerResult,
+      });
+      emittedCount = toPush.length;
+    }
+  } catch (e) {
+    if (e instanceof Error && /^\[LIN-\d{4}\]/.test(e.message)) throw e;
+    await failWith(e, 'LIN-9000', runStartTs, emittedCount, unchangedSkipped);
   } finally {
     await releaseLock();
   }
@@ -621,7 +632,7 @@ function buildExpiredStub(
     portalUrl: 'https://www.linkedin.com',
     source: 'linkedin',
     jobId,
-    linkedinJobId: snap?.linkedinJobId ?? '',
+    linkedinJobId: snap?.linkedinJobId ?? null,
     jobUrl: snap?.jobUrl ?? null,
     title: snap?.title ?? null,
     company: snap?.company ?? null,
@@ -632,6 +643,7 @@ function buildExpiredStub(
     applyUrl: snap?.jobUrl ?? null,
     applyType: null,
     description: null, descriptionHtml: null, descriptionMarkdown: null,
+    aiSummary: null, skills: [],
     seniorityLevel: null, employmentType: null, industry: null, jobFunction: null,
     workplaceType: null, applicantCount: null, easyApply: null,
     salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null,
@@ -652,7 +664,7 @@ function buildExpiredStub(
     expiredAt: c.expiredAt,
     isRepost: null, repostOfId: null, repostDetectedAt: null,
     language: null,
-    contentHash: c.contentHash ?? '',
+    contentHash: c.contentHash ?? null,
     isPromoted: null, postingBenefits: null, trackingId: null,
   };
 }

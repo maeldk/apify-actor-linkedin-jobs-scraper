@@ -10,14 +10,29 @@ markets: 1
 keyFeatures:
   - incremental
   - notifications
-  - paste-mode
+  - id: paste-mode
+    emoji: 🔗
+    title: Paste-mode
+    rationale: |
+      LinkedIn-specific URL parsing for job search URLs copied from the browser.
+    body: |
+      Paste a LinkedIn job search URL copied from your browser. The actor reads
+      the URL's keywords, location, geoId, date, work type, job type, company,
+      Easy Apply, and sort filters and runs that search directly.
   - id: recruiter-spam-filter
     body: |
       `removeAgency: true` runs a heuristic post-filter on company names
       (matching "recruitment", "staffing", etc.) and drops listings from
       3rd-party agencies — keep only direct-employer postings.
   - detail-enrichment
-  - salary-data
+  - id: description-truncation
+    emoji: ✂️
+    title: Description truncation
+    rationale: |
+      Implemented output control for enriched descriptions.
+    body: |
+      Cap enriched descriptions with `descriptionMaxLength` when downstream
+      systems need smaller records.
   - id: multi-region-presets
     emoji: 🌎
     title: Multi-region with presets
@@ -57,12 +72,12 @@ keyFeatures:
       `excludeKeywords` to scrub spam-prone titles.
   - compact
 
-# Trimmed from 14 → 10 to fit cap. Removed: change-classification (overlaps
-# with incremental), contact-extraction (LinkedIn restricts contact info),
-# description-truncation (generic cost knob), structured-export (universally
-# true). Maintainer ordering preserved within the cap.
+# Trimmed to fit cap. Removed: change-classification (overlaps with
+# incremental), contact-extraction (LinkedIn restricts contact info),
+# salary-data (LinkedIn guest HTML does not expose structured salary),
+# structured-export (universally true). Maintainer ordering preserved.
 disable_auto_detect:
   - change-classification    # overlap with incremental
   - contact-extraction        # LinkedIn hides contact info — low signal
-  - description-truncation    # generic cost knob, lowest priority
+  - salary-data               # not exposed in LinkedIn guest HTML
   - structured-export         # universally true — every Apify actor exports JSON/CSV/Excel

@@ -2,7 +2,9 @@
 
 ## v0.1.0 (unreleased)
 
-- Initial scaffold from adzuna-scraper v4 template (2026-04-26)
-- Target: LinkedIn public guest API (/jobs-guest/jobs/api/seeMoreJobPostings/search + /jobs-guest/jobs/api/jobPosting/<id>)
-- Pricing locked: `\.001 per result + `\.0005 per actor-start, flat
-- Schema: JobEventV1-style for unified pipeline with other `*-incremental-jobs-feed` actors
+- Initial LinkedIn Job Monitor release.
+- Added public LinkedIn jobs search, detail enrichment, related-jobs expansion, paste-mode start URLs, region presets, Easy Apply, company, salary, exclusion, and agency filters.
+- Added incremental state with NEW/UPDATED/UNCHANGED/EXPIRED/REAPPEARED classification, repost detection, state locking, outputMode, and delta-pricing-safe description truncation.
+- Added notifications for Telegram, Discord, Slack, WhatsApp Cloud API, and generic webhooks.
+- Added clean output guardrails, compact mode, deterministic `skills`, `aiSummary`, phone/email/URL extraction, ISO-2 country normalization, and no-login/no-cookie HTTP scraping.
+- Added diagnostics, leak-safe user errors, README/profile positioning, benchmark config, field coverage docs, and focused test coverage.
