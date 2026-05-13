@@ -15,7 +15,7 @@ import { buildStateKey } from './buildStateKey.js';
 import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, type RunMetadata } from './notifications.js';
 import { logRunFooter } from './runFooter.js';
 import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
-import { resolveRegions } from './regionResolver.js';
+import { GEOID_TO_ISO2, resolveRegions } from './regionResolver.js';
 import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost } from './inputNormalize.js';
 
 function classifyFallbackErrCode(internalCause: unknown, fallback: ErrCode): ErrCode {
@@ -39,7 +39,7 @@ async function failWith(internalCause: unknown, code: ErrCode, runStartTs: numbe
     payload: { emitted, unchangedSkipped, totalReviews: emitted + unchangedSkipped, status: 'failed', ok: false, durationMs: Date.now() - runStartTs },
     cause: internalCause,
   });
-  const safeMsg = internalCause instanceof UserSafeError ? internalCause.message : userSafeError(internalCause, code).message;
+  const safeMsg = internalCause instanceof UserSafeError ? internalCause.message : userSafeError(internalCause, effectiveCode).message;
   await Actor.fail(safeMsg);
   throw new Error(safeMsg);
 }
@@ -66,6 +66,7 @@ function canonicalizeUrl(raw: string): string {
 
 interface QuerySpec {
   params: SearchParams;
+  countryHint: string | null;
 }
 
 const TPR_REVERSE: Record<string, NonNullable<SearchParams['datePosted']>> = {
@@ -84,6 +85,10 @@ const JT_REVERSE: Record<string, NonNullable<SearchParams['jobType']>[number]> =
 const SB2_REVERSE: Record<string, number> = {
   '1': 40_000, '2': 60_000, '3': 80_000, '4': 100_000, '5': 120_000, '6': 140_000, '7': 160_000,
 };
+
+function countryHintFromGeoId(geoId: string | undefined): string | null {
+  return geoId ? GEOID_TO_ISO2[geoId] ?? null : null;
+}
 
 function csvParam<T extends string>(raw: string | null, map: Record<string, T>): T[] | undefined {
   if (!raw) return undefined;
@@ -190,7 +195,10 @@ function buildQueries(input: NormalizedInput): QuerySpec[] {
 
   const queries: QuerySpec[] = [];
   if (input.startUrls.length) {
-    for (const url of input.startUrls) queries.push({ params: parseStartUrl(url, input) });
+    for (const url of input.startUrls) {
+      const params = parseStartUrl(url, input);
+      queries.push({ params, countryHint: countryHintFromGeoId(params.geoId) });
+    }
     return queries;
   }
 
@@ -203,11 +211,14 @@ function buildQueries(input: NormalizedInput): QuerySpec[] {
     for (const geoId of geoIds) {
       queries.push({
         params: { ...baseFilters, keywords: input.keywords || undefined, geoId },
+        countryHint: countryHintFromGeoId(geoId),
       });
     }
   } else {
+    const params = { ...baseFilters, keywords: input.keywords || undefined, location: input.location };
     queries.push({
-      params: { ...baseFilters, keywords: input.keywords || undefined, location: input.location },
+      params,
+      countryHint: null,
     });
   }
 
@@ -365,11 +376,13 @@ async function main() {
 
     const seenJobIds = new Set<string>();
     const allJobs: ApiJob[] = [];
+    const countryHints = new Map<string, string | null>();
     for (const q of queries) {
       const jobs = await runQuery(q, input.maxResults, proxyUrl);
       for (const j of jobs) {
         if (seenJobIds.has(j.jobId)) continue;
         seenJobIds.add(j.jobId);
+        countryHints.set(j.jobId, q.countryHint);
         allJobs.push(j);
       }
     }
@@ -395,6 +408,7 @@ async function main() {
             for (const r of related) {
               if (seenJobIds.has(r.jobId)) continue;
               seenJobIds.add(r.jobId);
+              countryHints.set(r.jobId, countryHints.get(seed.jobId) ?? null);
               allJobs.push(r);
               added++;
             }
@@ -407,7 +421,7 @@ async function main() {
       log.info(`Expanded results: ${added} additional jobs.`);
     }
 
-    let items = allJobs.map((j) => transformJob(j, scrapedAt)).filter(isMeaningfulResult);
+    let items = allJobs.map((j) => transformJob(j, scrapedAt, countryHints.get(j.jobId) ?? null)).filter(isMeaningfulResult);
     if (input.removeAgency) items = items.filter((it) => !matchesAgency(it.company));
     items = items.filter((it) => !matchesExcluded(it, input));
     items = items.filter((it) => withinSalaryFilter(it, input));

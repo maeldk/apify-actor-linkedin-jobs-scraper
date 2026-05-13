@@ -109,6 +109,10 @@ export const ISO2_TO_GEOID: Record<string, string> = {
   LB: '101834488', // Lebanon
 };
 
+export const GEOID_TO_ISO2: Record<string, string> = Object.fromEntries(
+  Object.entries(ISO2_TO_GEOID).map(([iso2, geoId]) => [geoId, iso2]),
+);
+
 export interface ResolvedRegions {
   geoIds: string[];
   unresolved: string[];
