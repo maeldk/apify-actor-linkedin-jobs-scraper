@@ -6,6 +6,10 @@
     "version": "0.1",
     "buildTag": "latest",
     "readme": "../README.md",
+    "environmentVariables": {
+        "OPS_INGEST_URL": "https://ops.blackfalcondata.com/ingest",
+        "OPS_SECRET": "@OPS_SECRET"
+    },
     "dockerfile": "../Dockerfile",
     "input": "./input_schema.json",
     "output": "./output_schema.json",
@@ -31,7 +35,9 @@
             "name": "Recent US software-engineer jobs",
             "input": {
                 "keywords": "software engineer",
-                "geoIds": ["103644278"],
+                "geoIds": [
+                    "103644278"
+                ],
                 "datePosted": "last24h",
                 "maxResults": 100
             }
@@ -49,7 +55,9 @@
             "name": "Daily delta feed (incremental)",
             "input": {
                 "keywords": "software engineer",
-                "geoIds": ["103644278"],
+                "geoIds": [
+                    "103644278"
+                ],
                 "datePosted": "last24h",
                 "maxResults": 500,
                 "incrementalMode": true,
@@ -60,7 +68,9 @@
             "name": "Remote roles globally with detail enrichment",
             "input": {
                 "keywords": "senior backend engineer",
-                "workType": ["remote"],
+                "workType": [
+                    "remote"
+                ],
                 "datePosted": "last7d",
                 "enrichDetails": true,
                 "maxResults": 50
