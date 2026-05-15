@@ -1,3 +1,4 @@
+import './diag-stream.js';
 import { Actor, log } from 'apify';
 import type { Input, NormalizedInput, OutputItem } from './types.js';
 import { DEFAULTS, COMPACT_FIELDS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from './constants.js';
@@ -696,3 +697,4 @@ function filterCompact(item: OutputItem): Partial<OutputItem> {
 }
 
 await main();
+
