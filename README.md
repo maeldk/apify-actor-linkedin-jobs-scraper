@@ -43,7 +43,7 @@ Key parameters:
 - **`salaryMin`** — Minimum annual salary (USD). Mapped to LinkedIn's nearest f_SB2 bucket. Post-filtered exactly.
 - **`salaryMax`** — Maximum annual salary. Post-filtered (LinkedIn has no native max filter).
 - **`salaryIncludeUnknown`** — When salaryMin/Max set, include jobs with no salary data. (default: `true`)
-- ...and 34 more parameters
+- ...and 36 more parameters
 
 ## Input examples
 
@@ -241,7 +241,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $7.51. First month with incremental costs $0.63 / $1.35 / $2.44 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-05-13T20:06:29.636Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-05-17T02:26:13.602Z","version":1} -->
 
 ## FAQ
 
@@ -281,8 +281,8 @@ If you have questions, need a feature, or found a bug, please [open an issue](ht
 - [Arbeitsagentur Jobs Feed — German Federal Employment Agency](https://apify.com/blackfalcondata/arbeitsagentur-jobs-feed?fpr=1h3gvi) — Extract job listings from arbeitsagentur.de — Germany's official public employment portal with 1M+.
 - [Arbeitsagentur Scraper - German Jobs](https://apify.com/blackfalcondata/arbeitsagentur-scraper?fpr=1h3gvi) — Scrape arbeitsagentur.de - Germany’s official employment portal with 1M+ listings. Contact data,.
 - [Arbetsformedlingen Job Scraper](https://apify.com/blackfalcondata/arbetsformedlingen-scraper?fpr=1h3gvi) — Scrape arbetsformedlingen.se (Platsbanken) — Sweden's official employment portal. Returns 84.
-- [AutoScout24 Scraper](https://apify.com/blackfalcondata/autoscout24-scraper?fpr=1h3gvi) — Scrape autoscout24.com - Europe's largest used car marketplace with 770K+ listings. Structured.
-- [Bayt.com Scraper - Jobs from the Middle East](https://apify.com/blackfalcondata/bayt-scraper?fpr=1h3gvi) — Scrape bayt.com - the leading Middle East job board. Salary data, experience requirements.
+- [AutoScout24 Scraper — European Car Listings with Dealer Data](https://apify.com/blackfalcondata/autoscout24-scraper?fpr=1h3gvi) — Scrape autoscout24.com - Europe's largest used car marketplace with 770K+ listings. Structured.
+- [Bayt.com Scraper — MENA Jobs with Salary & Skills Filter](https://apify.com/blackfalcondata/bayt-scraper?fpr=1h3gvi) — Scrape bayt.com — the leading Middle East job board covering UAE, Saudi Arabia, Qatar, Egypt.
 
 ## Getting started with Apify
 

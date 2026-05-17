@@ -267,6 +267,7 @@
             "default": false
         },
         "enrichDetails": {
+            "sectionCaption": "🔬 Detail enrichment",
             "title": "🔬 Enrich with detail page",
             "description": "Fetch each job's detail page for full description, seniorityLevel, employmentType, jobFunction, industry, and applicantCount. Adds 1 HTTP request per job.",
             "type": "boolean",
