@@ -43,6 +43,39 @@ export interface StateKeyOptions {
 }
 
 /**
+ * Canonicalize a multi-input array into a single deterministic representative
+ * for use as `keyword` / `location` arguments to `buildStateKey`.
+ *
+ * Why: `buildStateKey` fingerprints `keyword` / `location` separately from
+ * `dimensions` (via reserved `__keyword` / `__location` payload keys). Sorting
+ * `dimensions.queries` is therefore NOT enough to make the full state-key
+ * order-insensitive — the readable prefix and the fingerprint hash both diverge
+ * if `keyword: queries[0]` is passed. Codex Round 7 ruling: for actors where the
+ * fetched universe is the union of all queries/locations/startUrls, user input
+ * order is not semantically meaningful and must not split incremental state.
+ *
+ * Pattern: trim + drop empties + sort + join('+').
+ *
+ * Single-input case: `['developer']` → `'developer'` (identical to `queries[0]`),
+ * so existing single-query state survives migration unchanged. Only multi-input
+ * users see a one-time fresh state when an actor adopts this helper.
+ *
+ * Opt-out: only when code proves the fetched universe genuinely depends on
+ * input order (rare — emission ordering is not the same as fetch-universe).
+ */
+export function canonicalStateKeyPart(
+  values: readonly (string | null | undefined)[] | null | undefined,
+): string | null {
+  if (!values || values.length === 0) return null;
+  const normalized = values
+    .filter((v): v is string => typeof v === 'string')
+    .map(v => v.trim())
+    .filter(v => v.length > 0)
+    .sort();
+  return normalized.length > 0 ? normalized.join('+') : null;
+}
+
+/**
  * Stable 8-char hex hash of a filter set. Empty/all-unset → 'nofilter'.
  * Sorted, normalized JSON → SHA256 → first 8 hex chars.
  */
@@ -69,16 +102,22 @@ export function buildFilterFingerprint(dimensions: Record<string, unknown>): str
  *                   dimensions: { startUrls: ['https://...'] } })
  *   → 'incremental_developer_wien_a3b91e22'
  */
+// Cap readable parts so the final stateKey + KV-store prefixes (e.g. "state-lock_")
+// never exceed Apify's 256-char KV-key limit. The 8-char fingerprint at the end
+// keeps inputs that collide at the readable-part level isolated.
+const READABLE_PART_MAX = 64;
+
 export function buildStateKey(opts: StateKeyOptions): string {
   const sanitize = (s: string) =>
     s.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const clamp = (s: string) => (s.length > READABLE_PART_MAX ? s.slice(0, READABLE_PART_MAX).replace(/_+$/g, '') : s);
   const parts: string[] = [opts.prefix ?? 'incremental'];
   if (opts.keyword) {
-    const k = sanitize(opts.keyword);
+    const k = clamp(sanitize(opts.keyword));
     if (k) parts.push(k);
   }
   if (opts.location) {
-    const l = sanitize(opts.location);
+    const l = clamp(sanitize(opts.location));
     if (l) parts.push(l);
   }
   // Include raw keyword + location in fingerprint payload so inputs that
