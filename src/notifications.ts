@@ -22,9 +22,10 @@ export interface NotificationItem {
   title: string | null;
   company: string | null;
   location: string | null;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  salaryCurrency: string | null;
+  /** Optional — job-board actors only. Non-jobboard actors (marketplaces, reviews) can omit. */
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string | null;
   description: string | null;
   applyUrl: string | null;
   /** ISO-8601 timestamp of when the listing was posted. */
@@ -78,8 +79,8 @@ const CURRENCY_PREFIX: Record<string, string> = {
   SEK: 'kr ', DKK: 'kr ', NOK: 'kr ',
 };
 
-function fmtMoney(amount: number | null, currency: string | null): string {
-  if (amount === null) return '—';
+function fmtMoney(amount: number | null | undefined, currency: string | null | undefined): string {
+  if (amount == null || !Number.isFinite(amount)) return '—';
   const prefix = currency
     ? (CURRENCY_PREFIX[currency] ?? `${currency} `)
     : '$';
@@ -87,12 +88,14 @@ function fmtMoney(amount: number | null, currency: string | null): string {
 }
 
 function fmtSalaryRange(item: NotificationItem): string | null {
-  if (item.salaryMin === null && item.salaryMax === null) return null;
-  const cur = item.salaryCurrency;
-  if (item.salaryMin !== null && item.salaryMax !== null && item.salaryMin !== item.salaryMax) {
-    return `${fmtMoney(item.salaryMin, cur)}–${fmtMoney(item.salaryMax, cur)}`;
+  const min = item.salaryMin ?? null;
+  const max = item.salaryMax ?? null;
+  if (min === null && max === null) return null;
+  const cur = item.salaryCurrency ?? null;
+  if (min !== null && max !== null && min !== max) {
+    return `${fmtMoney(min, cur)}–${fmtMoney(max, cur)}`;
   }
-  return fmtMoney(item.salaryMax ?? item.salaryMin, cur);
+  return fmtMoney(max ?? min, cur);
 }
 
 /** Escape Markdown V1 special chars: _ * [ ] ` */
@@ -194,6 +197,15 @@ export function formatSlack(items: NotificationItem[], metadata: RunMetadata | n
 
 // ── Senders ─────────────────────────────────────────────────────────────
 
+/** Hostname-only — never include path or query, since Telegram bot tokens and
+ *  Slack/Discord webhook secrets all live in the URL path. Thrown errors are
+ *  logged by callers and shown to end-users, so the URL must be opaque.
+ *  Exported for tests; do NOT use elsewhere — call sites should rely on
+ *  postJson swallowing the URL into the thrown Error message. */
+export function safeOrigin(url: string): string {
+  try { return new URL(url).hostname; } catch { return 'unknown-host'; }
+}
+
 async function postJson(url: string, body: unknown): Promise<void> {
   const res = await fetch(url, {
     method: 'POST',
@@ -203,7 +215,7 @@ async function postJson(url: string, body: unknown): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`HTTP ${res.status} from ${url.split('?')[0]}: ${text.slice(0, 200)}`);
+    throw new Error(`HTTP ${res.status} from ${safeOrigin(url)}: ${text.slice(0, 200)}`);
   }
 }
 
