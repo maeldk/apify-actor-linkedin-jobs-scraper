@@ -44,38 +44,53 @@ function pushLine(stream: StreamName, value: string): void {
 }
 
 async function postSafe(body: Record<string, unknown>): Promise<void> {
+  if (!sinkUrl || !sinkSecret || typeof fetch !== 'function') return;
+  // Manual AbortController instead of AbortSignal.timeout(): Node 22's
+  // AbortSignal.timeout doesn't reliably cancel an in-flight undici fetch
+  // when the remote is mid-handshake — pending sockets accumulate in the
+  // connection pool and starve future posts.
+  const ctrl = new AbortController();
+  const t = setTimeout(() => { try { ctrl.abort(); } catch {} }, 5000);
   try {
-    if (!sinkUrl || !sinkSecret || typeof fetch !== 'function') return;
     await fetch(sinkUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-diag-secret': sinkSecret },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
+      signal: ctrl.signal,
     });
   } catch {
     // Ignore transport and serialization failures.
+  } finally {
+    clearTimeout(t);
   }
 }
 
 async function flush(reason: string): Promise<void> {
+  if (!sinkUrl || !sinkSecret || flushing || buffer.length === 0) return;
+  flushing = true;
+  const lines = buffer.splice(0, buffer.length);
   try {
-    if (!sinkUrl || !sinkSecret || flushing || buffer.length === 0) return;
-    flushing = true;
-    const lines = buffer.splice(0, buffer.length);
-    await postSafe({
-      ts: Date.now(),
-      type: 'info',
-      code: null,
-      meaning: null,
-      actorId,
-      runId,
-      userId,
-      detail: 'logbatch',
-      page: null,
-      targetDomain: null,
-      cause: null,
-      payload: { reason, lines },
-    });
+    // Hard deadline (10s) on the flush itself — guarantees the `flushing`
+    // lock is released even if postSafe's abort doesn't fire (defence in
+    // depth for the same Node 22 abort-leak that prompted the controller
+    // change above).
+    await Promise.race([
+      postSafe({
+        ts: Date.now(),
+        type: 'info',
+        code: null,
+        meaning: null,
+        actorId,
+        runId,
+        userId,
+        detail: 'logbatch',
+        page: null,
+        targetDomain: null,
+        cause: null,
+        payload: { reason, lines },
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+    ]);
   } catch {
     // Ignore all internal failures.
   } finally {
@@ -176,4 +191,3 @@ function install(): void {
 install();
 
 export {};
-

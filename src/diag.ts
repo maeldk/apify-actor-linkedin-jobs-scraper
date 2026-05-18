@@ -137,15 +137,22 @@ async function postToSink(payload: Record<string, unknown>): Promise<void> {
   const url = getEnvSafe('OPS_INGEST_URL');
   const secret = getEnvSafe('OPS_SECRET');
   if (!url || !secret) return;
+  // Manual AbortController (not AbortSignal.timeout): Node 22 can leave the
+  // underlying undici fetch in-flight after the signal fires, causing the
+  // socket to pile up in the pool and starve subsequent posts.
+  const ctrl = new AbortController();
+  const t = setTimeout(() => { try { ctrl.abort(); } catch {} }, 5000);
   try {
     await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-diag-secret': secret },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(5000),
+      signal: ctrl.signal,
     });
   } catch {
     // Diagnostic sink failures must never affect main run.
+  } finally {
+    clearTimeout(t);
   }
 }
 
