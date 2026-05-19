@@ -25,6 +25,8 @@ export const KNOWN_CANARY_ACTOR_IDS: ReadonlySet<string> = new Set([
   'gDOe35GJZDndmvrLo',
   // zhaopin-canary → shadows zhaopin-scraper
   'QXPGPvjhotABmYamU',
+  // linkedin-jobs-canary → shadows linkedin-jobs-scraper
+  'GnI5iKVOtoFHcf4DF',
 ]);
 
 /**
