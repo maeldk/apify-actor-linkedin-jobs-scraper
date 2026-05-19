@@ -50,6 +50,7 @@ export interface Input {
   // ── Incremental & state
   incrementalMode?: boolean;
   stateKey?: string;
+  allowNonIncrementalFallback?: boolean;
   outputMode?: 'all' | 'new-only' | 'changed-only';
   emitUnchanged?: boolean;
   emitExpired?: boolean;
@@ -76,6 +77,8 @@ export interface Input {
   // ── Output controls
   compact?: boolean;
   descriptionMaxLength?: number;
+  descriptionFormat?: 'all' | 'text' | 'html' | 'markdown';
+  excludeEmptyFields?: boolean;
   phoneExtractionMode?: 'strict' | 'lenient';
   maxResults?: number;
 }
@@ -114,6 +117,7 @@ export interface NormalizedInput {
 
   incrementalMode: boolean;
   stateKey: string | null;
+  allowNonIncrementalFallback: boolean;
   outputMode: 'all' | 'new-only' | 'changed-only';
   emitUnchanged: boolean;
   emitExpired: boolean;
@@ -137,6 +141,8 @@ export interface NormalizedInput {
 
   compact: boolean;
   descriptionMaxLength: number;
+  descriptionFormat: 'all' | 'text' | 'html' | 'markdown';
+  excludeEmptyFields: boolean;
   phoneExtractionMode: 'strict' | 'lenient';
   maxResults: number;
 }

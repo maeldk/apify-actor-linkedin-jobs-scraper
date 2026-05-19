@@ -236,6 +236,12 @@
             "type": "string",
             "editor": "textfield"
         },
+        "allowNonIncrementalFallback": {
+            "title": "↩️ Allow Non-Incremental Fallback",
+            "description": "If incremental mode is requested but the state store is not accessible on this account, fall back to a non-incremental run instead of failing. Default: fail loudly so missing state is not silently ignored.",
+            "type": "boolean",
+            "default": false
+        },
         "outputMode": {
             "title": "📤 Output mode",
             "description": "Which items to emit when in incrementalMode.",
@@ -396,6 +402,33 @@
             "editor": "number",
             "default": 100,
             "minimum": 0
+        },
+        "descriptionFormat": {
+            "title": "Description format",
+            "type": "string",
+            "editor": "select",
+            "description": "Pick a single description representation. `all` keeps every variant; `text` / `html` / `markdown` drop the others.",
+            "enum": [
+                "all",
+                "text",
+                "html",
+                "markdown"
+            ],
+            "enumTitles": [
+                "All variants (default)",
+                "Text",
+                "Html",
+                "Markdown"
+            ],
+            "default": "all",
+            "prefill": "all"
+        },
+        "excludeEmptyFields": {
+            "title": "Exclude empty fields from output",
+            "type": "boolean",
+            "description": "Drop null, empty-string, and empty-array fields from each record before push. Smaller payloads for AI agents and dashboards.",
+            "default": false,
+            "prefill": false
         }
     },
     "required": []

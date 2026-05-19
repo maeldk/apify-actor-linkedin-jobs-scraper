@@ -1,6 +1,7 @@
 import { DEFAULTS } from './constants.js';
 import type { Input, NormalizedInput } from './types.js';
-
+
+import { normalizeDescriptionFormat } from './descriptionFormat.js';
 export function cleanString(value: string | null | undefined): string | undefined {
   const cleaned = value?.replace(/\s+/g, ' ').trim();
   return cleaned || undefined;
@@ -72,6 +73,7 @@ export function normalizeInput(raw: Partial<Input>): NormalizedInput {
 
     incrementalMode: raw.incrementalMode ?? false,
     stateKey: raw.stateKey ?? null,
+    allowNonIncrementalFallback: raw.allowNonIncrementalFallback ?? false,
     outputMode: raw.outputMode ?? 'all',
     emitUnchanged: raw.emitUnchanged ?? false,
     emitExpired: raw.emitExpired ?? false,
@@ -95,6 +97,8 @@ export function normalizeInput(raw: Partial<Input>): NormalizedInput {
 
     compact: raw.compact ?? false,
     descriptionMaxLength: raw.descriptionMaxLength ?? 0,
+    descriptionFormat: normalizeDescriptionFormat(raw.descriptionFormat),
+    excludeEmptyFields: raw.excludeEmptyFields ?? false,
     phoneExtractionMode: raw.phoneExtractionMode ?? 'strict',
     maxResults: raw.maxResults ?? DEFAULTS.maxResults,
   };

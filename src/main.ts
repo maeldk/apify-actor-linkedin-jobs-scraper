@@ -11,14 +11,18 @@ import {
     buildTrackedHash, classifyJob, findExpiredJobs, buildUpdatedState,
     filterByEmissionPolicy, stateKvKey, detectRepostMatch,
 } from './incrementalState.js';
-import { lockKvKey, tryAcquire, verifyLock, type StateLock } from './stateLock.js';
+import { lockKvKey, verifyLock, type StateLock } from './stateLock.js';
+import { openIncrementalState, defaultHandler, type OpenResult, type ApifyAdapter } from './openIncrementalState.js';
+import { isCanaryRun } from './canaryActorIds.js';
 import { buildStateKey } from './buildStateKey.js';
 import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, type RunMetadata } from './notifications.js';
 import { logRunFooter } from './runFooter.js';
 import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
 import { GEOID_TO_ISO2, resolveRegions } from './regionResolver.js';
 import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost } from './inputNormalize.js';
-
+
+import { applyDescriptionFormat, normalizeDescriptionFormat } from './descriptionFormat.js';
+import { maybeStripEmpty } from './emitFilter.js';
 function classifyFallbackErrCode(internalCause: unknown, fallback: ErrCode): ErrCode {
   if (fallback !== 'LIN-9000') return fallback;
   const text = internalCause instanceof Error ? internalCause.message : String(internalCause);
@@ -330,33 +334,64 @@ async function main() {
       log.info(`Expanded ${expanded.geoIds.length - input.geoIds.length} region/preset code(s) → geoIds`);
     }
   }
-  // ── Load prior incremental state ────────────────────────────────────
+  // ── Load prior state + acquire lock (via _lib/openIncrementalState) ──
+  // Uses the canonical helper:
+  //   - 'opened'      → store handle + lock acquired; we own the run.
+  //   - 'lock_busy'   → another run holds the lock; exit gracefully + emit diag.
+  //   - 'unavailable' → KV-store inaccessible (typically 403 under
+  //                     LIMITED_PERMISSIONS). Hybrid UX: canary or opt-in
+  //                     fallback degrades to non-incremental; otherwise
+  //                     Actor.fail with INCREMENTAL_UNAVAILABLE.
   let priorState: IncrementalState | null = null;
-  let kvStore: Awaited<ReturnType<typeof Actor.openKeyValueStore>> | null = null;
+  let stateKv: Awaited<ReturnType<typeof Actor.openKeyValueStore>> | null = null;
+  let helperReleaseLock: (() => Promise<void>) | null = null;
+
   if (input.incrementalMode && input.stateKey) {
-    kvStore = await Actor.openKeyValueStore(STATE_STORE);
-    const key = stateKvKey(input.stateKey);
-    const raw = await kvStore.getValue<IncrementalState>(key);
-    if (raw && raw.version === 1 && raw.stateKey === input.stateKey) {
-      priorState = raw;
-      log.debug(`Loaded prior state: ${Object.values(raw.jobs).filter((j) => j.active).length} active jobs`);
-    }
-    const lockKey = lockKvKey(input.stateKey);
-    const existingLock = await kvStore.getValue<StateLock>(lockKey);
     const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
-    const { result: lockResult, newLock } = tryAcquire(existingLock, runId, input.stateKey);
-    if (!lockResult.acquired) {
-      log.warning(`State lock held by another run for stateKey "${input.stateKey}" — exiting gracefully.`);
-      await emit({ type: 'run.complete', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'success', ok: true, durationMs: Date.now() - runStartTs, reason: 'lock_busy' } });
-      await Actor.exit();
-      return;
+    const openResult: OpenResult = await openIncrementalState(
+      { storeName: STATE_STORE, stateKey: input.stateKey, runId },
+      { open: (name) => Actor.openKeyValueStore(name) },
+    );
+
+    const apifyAdapter: ApifyAdapter = {
+      log,
+      actor: { exit: () => Actor.exit(), fail: (msg) => Actor.fail(msg) },
+      isCanaryRun,
+      hardExitSuccess: () => process.exit(0),
+      hardExitFailure: () => process.exit(1),
+      onLockBusy: async (_b) => {
+        await emit({ type: 'run.complete', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'success', ok: true, durationMs: Date.now() - runStartTs, reason: 'lock_busy' } });
+      },
+      onIncrementalUnavailableFail: async (un) => {
+        await emit({ type: 'run.complete', code: 'LIN-4002', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'failed', ok: false, durationMs: Date.now() - runStartTs }, cause: un.error });
+      },
+    };
+
+    const stayIncremental = await defaultHandler(
+      openResult,
+      { allowNonIncrementalFallback: input.allowNonIncrementalFallback, actorId: process.env.APIFY_ACTOR_ID },
+      apifyAdapter,
+    );
+
+    if (!stayIncremental) {
+      // lock_busy / fail paths have already exited; only the degrade path
+      // returns false-and-continues. In that case, run as non-incremental.
+      input.incrementalMode = false;
+    } else if (openResult.kind === 'opened') {
+      stateKv = openResult.store as Awaited<ReturnType<typeof Actor.openKeyValueStore>>;
+      helperReleaseLock = openResult.releaseLock;
+      const raw = await stateKv.getValue<IncrementalState>(stateKvKey(input.stateKey));
+      if (raw && raw.version === 1 && raw.stateKey === input.stateKey) {
+        priorState = raw;
+        const activeCount = Object.values(raw.jobs).filter(j => j.active).length;
+        log.info(`Loaded prior state: ${activeCount} active jobs`);
+      }
     }
-    if (newLock) await kvStore.setValue(lockKey, newLock);
   }
 
   const releaseLock = async () => {
-    if (input.incrementalMode && input.stateKey && kvStore) {
-      try { await kvStore.setValue(lockKvKey(input.stateKey), null); }
+    if (helperReleaseLock) {
+      try { await helperReleaseLock(); }
       catch (e) { log.warning(`Failed to release lock: ${e instanceof Error ? e.message : e}`); }
     }
   };
@@ -473,7 +508,7 @@ async function main() {
     }
 
     // ── Incremental classification ──────────────────────────────────────
-    if (input.incrementalMode && input.stateKey && kvStore) {
+    if (input.incrementalMode && input.stateKey && stateKv) {
       const classifications: ClassifiedRecord[] = [];
       const currentIds = new Set<string>();
       for (const item of items) {
@@ -551,18 +586,18 @@ async function main() {
       }
 
       if (toPush.length > 0) {
-        await Actor.pushData(toPush);
+        await Actor.pushData(applyFinalFilters(toPush as Record<string, unknown> | Record<string, unknown>[], input));
         try { await Actor.charge({ eventName: 'apify-default-dataset-item', count: toPush.length }); } catch {}
       }
       await dispatchNotifications(input, toPush as unknown as OutputItem[], scrapedAt);
 
       const lockKey = lockKvKey(input.stateKey);
       const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
-      const currentLock = await kvStore.getValue<StateLock>(lockKey);
+      const currentLock = await stateKv.getValue<StateLock>(lockKey);
       if (!verifyLock(currentLock, runId)) {
         await failWith(new Error('state lock lost during run'), 'LIN-4001', runStartTs, emittedCount ?? 0, unchangedSkipped ?? 0);
       }
-      await kvStore.setValue(stateKvKey(input.stateKey), buildUpdatedState(input.stateKey, scrapedAt, priorState, classifications, snapshots));
+      await stateKv.setValue(stateKvKey(input.stateKey), buildUpdatedState(input.stateKey, scrapedAt, priorState, classifications, snapshots));
 
       unchangedSkipped = classifications.filter((c) => c.changeType === 'UNCHANGED').length;
       log.info('Incremental complete', { emitted: toPush.length, unchangedSkipped });
@@ -584,7 +619,7 @@ async function main() {
       }
 
       if (toPush.length > 0) {
-        await Actor.pushData(toPush);
+        await Actor.pushData(applyFinalFilters(toPush as Record<string, unknown> | Record<string, unknown>[], input));
         try { await Actor.charge({ eventName: 'apify-default-dataset-item', count: toPush.length }); } catch {}
       }
 
@@ -694,6 +729,18 @@ function filterCompact(item: OutputItem): Partial<OutputItem> {
     if (key in item) compact[key] = (item as unknown as Record<string, unknown>)[key];
   }
   return compact as Partial<OutputItem>;
+}
+
+
+function applyFinalFilters(data: Record<string, unknown> | Record<string, unknown>[], input: { descriptionFormat: 'all' | 'text' | 'html' | 'markdown'; excludeEmptyFields: boolean }): Record<string, unknown> | Record<string, unknown>[] {
+  if (Array.isArray(data)) {
+    return data.map(item => {
+      const formatted = applyDescriptionFormat(item, input.descriptionFormat);
+      return maybeStripEmpty(formatted, input.excludeEmptyFields) as Record<string, unknown>;
+    });
+  }
+  const formatted = applyDescriptionFormat(data, input.descriptionFormat);
+  return maybeStripEmpty(formatted, input.excludeEmptyFields) as Record<string, unknown>;
 }
 
 await main();
