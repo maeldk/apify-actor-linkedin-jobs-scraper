@@ -150,6 +150,69 @@ function emitFatal(kind: string, err: unknown): void {
   }
 }
 
+function emitWedgeRecovery(elapsedMs: number): void {
+  try {
+    void postSafe({
+      ts: Date.now(),
+      type: 'run.complete',
+      code: 'RUN-FATAL',
+      meaning: 'wedge.deadline_guard',
+      actorId,
+      runId,
+      userId,
+      detail: 'deadline_guard',
+      page: null,
+      targetDomain: null,
+      cause: `Deadline guard fired — actor still running ${(elapsedMs / 1000).toFixed(0)}s into run, within 60s of platform timeout`,
+      payload: { status: 'failed', ok: false, durationMs: elapsedMs, reason: 'wedge_recovery_deadline_guard' },
+    });
+  } catch {
+    // Ignore all internal failures.
+  }
+}
+
+/**
+ * Defensive wall-clock guard for silent wedges.
+ *
+ * Several actors have intermittently wedged at Apify's wall-clock timeout
+ * (2h burn, zero exit signal) when a hung HTTP socket or stalled Promise
+ * keeps the event loop alive without making progress. The actor's own
+ * run.complete never fires; cf-worker eventually reaps the run as failed.
+ *
+ * This guard reads Apify's `APIFY_ACTOR_TIMEOUT_AT` (ISO timestamp it sets
+ * before launching the container) and arms an unref'd timer to fire 60s
+ * before that deadline. If it fires, we're almost certainly wedged — flush
+ * the log buffer, post a terminal run.complete to the sink so operators
+ * see the wedge, and force process.exit(1) so the container shuts down
+ * 60s early instead of burning the full timeout window.
+ *
+ * Unref'd: a normal Actor.exit() calls process.exit which cancels all
+ * timers, so this guard never fires on healthy runs.
+ */
+function installDeadlineGuard(): void {
+  try {
+    const iso = env.APIFY_ACTOR_TIMEOUT_AT || env.ACTOR_TIMEOUT_AT;
+    if (!iso) return;
+    const deadlineMs = Date.parse(iso);
+    if (Number.isNaN(deadlineMs)) return;
+    const startTs = Date.now();
+    const fireInMs = deadlineMs - 60_000 - startTs;
+    if (fireInMs <= 0) return;
+    // Cap to 6h - 60s to bound the timer if env is corrupted with a
+    // far-future value.
+    const cappedMs = Math.min(fireInMs, 6 * 3600 * 1000 - 60_000);
+    const guard = setTimeout(() => {
+      try { void flush('deadline_guard'); } catch {}
+      try { emitWedgeRecovery(Date.now() - startTs); } catch {}
+      try { process.stderr.write('Run hit internal deadline guard — forcing exit.\n'); } catch {}
+      setTimeout(() => process.exit(1), 200);
+    }, cappedMs) as unknown as { unref?: () => void };
+    guard.unref?.();
+  } catch {
+    // Ignore initialization failures.
+  }
+}
+
 function install(): void {
   try {
     if (installed) return;
@@ -183,6 +246,8 @@ function install(): void {
     process.on('beforeExit', async () => {
       try { await flush('beforeExit'); } catch {}
     });
+
+    installDeadlineGuard();
   } catch {
     // Ignore initialization failures.
   }
