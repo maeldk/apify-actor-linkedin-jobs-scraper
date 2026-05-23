@@ -23,21 +23,19 @@ import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost } 
 
 import { applyDescriptionFormat, normalizeDescriptionFormat } from './descriptionFormat.js';
 import { maybeStripEmpty } from './emitFilter.js';
-function classifyFallbackErrCode(internalCause: unknown, fallback: ErrCode): ErrCode {
-  if (fallback !== 'LIN-9000') return fallback;
-  const text = internalCause instanceof Error ? internalCause.message : String(internalCause);
-  const msg = text.toLowerCase();
-  if (/\b(429|rate.?limit|too many requests)\b/i.test(text)) return 'LIN-2030';
-  if (/\b(403|401|unauthori[sz]ed|forbidden|blocked|waf|cloudflare|akamai|challenge|captcha)\b/i.test(text)) return 'LIN-2030';
-  if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b5\d{2}\b/.test(text)) return 'LIN-2010';
-  if (/\b(http|api|status|returned|failed)\b/i.test(text) && /\b[4-5]\d{2}\b/.test(text)) return 'LIN-2010';
-  if (/\b(unexpected|invalid|parse|json|shape|missing|endpoint may have changed|structure)\b/i.test(text)) return 'LIN-3001';
-  if (/\b(timeout|timed out|econnreset|econnrefused|enotfound|network|socket|fetch failed|abort)\b/i.test(text)) return 'LIN-2001';
-  if (/\b(lock lost|state lock lost)\b/i.test(msg)) return 'LIN-4001';
-  return fallback;
-}
+import { classifyFallbackErrCode, type ErrCodeMap } from './errCodeClassifier.js';
+const FALLBACK_ERR_CODES: ErrCodeMap = {
+  rateLimit: '2030',
+  authBlock: '2030',
+  http5xx: '2010',
+  httpOther: '2010',
+  parseError: '3001',
+  networkTimeout: '2001',
+  lockLost: '4001',
+};
+
 async function failWith(internalCause: unknown, code: ErrCode, runStartTs: number, emitted: number, unchangedSkipped: number): Promise<never> {
-  const effectiveCode: ErrCode = internalCause instanceof UserSafeError ? internalCause.code : classifyFallbackErrCode(internalCause, code);
+  const effectiveCode: ErrCode = internalCause instanceof UserSafeError ? internalCause.code : classifyFallbackErrCode(internalCause, code, 'LIN', FALLBACK_ERR_CODES) as ErrCode;
   await emit({
     type: 'run.complete',
     code: effectiveCode,
