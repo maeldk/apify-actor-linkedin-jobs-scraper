@@ -18,6 +18,11 @@ const actorId = env.ACTOR_ID || env.APIFY_ACTOR_ID || 'local';
 const userId = env.APIFY_USER_ID || env.ACTOR_USER_ID || 'local';
 
 const buffer: CapturedLine[] = [];
+// Wall-clock of the most recent captured stdout/stderr line. A working actor
+// logs continuously (page fetched, items pushed, …); a wedged one goes silent.
+// The deadline guard uses `now - lastLineTs` as a free liveness heartbeat to
+// tell a genuine wedge apart from a run that merely ran out of its timeout.
+let lastLineTs = Date.now();
 let flushing = false;
 let installed = false;
 
@@ -35,7 +40,9 @@ function pushLine(stream: StreamName, value: string): void {
     if (!value) return;
     const clean = stripAnsi(value);
     const line = clean.length > MAX_LINE_LENGTH ? clean.slice(0, MAX_LINE_LENGTH) : clean;
-    buffer.push({ ts: Date.now(), stream, line });
+    const ts = Date.now();
+    lastLineTs = ts;
+    buffer.push({ ts, stream, line });
     if (buffer.length > MAX_BUFFER_LINES) buffer.splice(0, buffer.length - MAX_BUFFER_LINES);
     if (buffer.length >= FLUSH_AT_LINES) void flush('size');
   } catch {
@@ -150,21 +157,61 @@ function emitFatal(kind: string, err: unknown): void {
   }
 }
 
-function emitWedgeRecovery(elapsedMs: number): void {
+/**
+ * Head-room (ms) the guard reserves before Apify's hard timeout so it has time
+ * to flush logs + emit a terminal event before SIGKILL. 15% of the run, capped
+ * at 60s, floored at 20s — so a generous timeout keeps the full 60s while a
+ * short timeout isn't handed half the run as shutdown buffer.
+ * Exported for unit testing.
+ */
+export function deadlineBufferMs(totalBudgetMs: number): number {
+  return Math.max(20_000, Math.min(60_000, Math.floor(totalBudgetMs * 0.15)));
+}
+
+/**
+ * Decide whether a fired deadline guard reflects a genuine wedge (hung socket /
+ * stalled promise) versus a run that simply ran out of its timeout. A wedge =
+ * the run had ample budget AND has produced no log output for a long stretch.
+ * A short total budget, or a run still actively logging, is NOT a wedge — it's
+ * an under-budgeted (often user-misconfigured) run that shouldn't be triaged
+ * as an actor bug. Exported for unit testing.
+ */
+export function classifyDeadline(totalBudgetMs: number, idleMs: number): { wedged: boolean } {
+  return { wedged: totalBudgetMs >= 5 * 60_000 && idleMs >= 90_000 };
+}
+
+function emitDeadlineExit(elapsedMs: number, totalBudgetMs: number, idleMs: number): void {
+  const { wedged } = classifyDeadline(totalBudgetMs, idleMs);
+  const budgetS = (totalBudgetMs / 1000).toFixed(0);
+  const elapsedS = (elapsedMs / 1000).toFixed(0);
+  const idleS = (idleMs / 1000).toFixed(0);
   try {
     void postSafe({
       ts: Date.now(),
       type: 'run.complete',
-      code: 'RUN-FATAL',
-      meaning: 'wedge.deadline_guard',
+      // Preserve the exact wedge signal operators already key on; route the
+      // benign "timeout too short / still working" case to its own code so it
+      // stops polluting wedge triage.
+      code: wedged ? 'RUN-FATAL' : 'RUN-DEADLINE',
+      meaning: wedged ? 'wedge.deadline_guard' : 'timeout.budget_exhausted',
       actorId,
       runId,
       userId,
       detail: 'deadline_guard',
       page: null,
       targetDomain: null,
-      cause: `Deadline guard fired — actor still running ${(elapsedMs / 1000).toFixed(0)}s into run, within 60s of platform timeout`,
-      payload: { status: 'failed', ok: false, durationMs: elapsedMs, reason: 'wedge_recovery_deadline_guard' },
+      cause: wedged
+        ? `Deadline guard fired — actor wedged: no log output for ${idleS}s, ${elapsedS}s into a ${budgetS}s run`
+        : `Deadline guard fired — ${budgetS}s run timeout reached while still active (${elapsedS}s in, last output ${idleS}s ago)`,
+      payload: {
+        status: 'failed',
+        ok: false,
+        durationMs: elapsedMs,
+        totalBudgetMs,
+        idleMs,
+        wedged,
+        reason: wedged ? 'wedge_recovery_deadline_guard' : 'timeout_budget_exhausted',
+      },
     });
   } catch {
     // Ignore all internal failures.
@@ -180,11 +227,13 @@ function emitWedgeRecovery(elapsedMs: number): void {
  * run.complete never fires; cf-worker eventually reaps the run as failed.
  *
  * This guard reads Apify's `APIFY_ACTOR_TIMEOUT_AT` (ISO timestamp it sets
- * before launching the container) and arms an unref'd timer to fire 60s
- * before that deadline. If it fires, we're almost certainly wedged — flush
- * the log buffer, post a terminal run.complete to the sink so operators
- * see the wedge, and force process.exit(1) so the container shuts down
- * 60s early instead of burning the full timeout window.
+ * before launching the container) and arms an unref'd timer to fire shortly
+ * before that deadline (see deadlineBufferMs). When it fires it flushes the
+ * log buffer, posts a terminal run.complete to the sink, and forces
+ * process.exit(1) so the container shuts down early instead of burning the
+ * full timeout window. The terminal event is classified (see classifyDeadline)
+ * so a genuine wedge stays a wedge while a too-short timeout is reported
+ * distinctly rather than as a false wedge.
  *
  * Unref'd: a normal Actor.exit() calls process.exit which cancels all
  * timers, so this guard never fires on healthy runs.
@@ -196,15 +245,30 @@ function installDeadlineGuard(): void {
     const deadlineMs = Date.parse(iso);
     if (Number.isNaN(deadlineMs)) return;
     const startTs = Date.now();
-    const fireInMs = deadlineMs - 60_000 - startTs;
+    const totalBudgetMs = deadlineMs - startTs;
+    const fireInMs = deadlineMs - deadlineBufferMs(totalBudgetMs) - startTs;
     if (fireInMs <= 0) return;
     // Cap to 6h - 60s to bound the timer if env is corrupted with a
     // far-future value.
     const cappedMs = Math.min(fireInMs, 6 * 3600 * 1000 - 60_000);
     const guard = setTimeout(() => {
+      // Snapshot idle time BEFORE our own stderr write below pushes lastLineTs.
+      const idleMs = Date.now() - lastLineTs;
+      const { wedged } = classifyDeadline(totalBudgetMs, idleMs);
       try { void flush('deadline_guard'); } catch {}
-      try { emitWedgeRecovery(Date.now() - startTs); } catch {}
-      try { process.stderr.write('Run hit internal deadline guard — forcing exit.\n'); } catch {}
+      try { emitDeadlineExit(Date.now() - startTs, totalBudgetMs, idleMs); } catch {}
+      try {
+        // A genuine wedge is our bug → stay opaque. A benign timeout means the
+        // user's run simply ran out of its allotted time → give actionable,
+        // self-contained remediation (their own settings only; no infra or
+        // scraping methodology).
+        process.stderr.write(wedged
+          ? 'Run hit internal deadline guard — forcing exit.\n'
+          : 'Run stopped early to exit cleanly before the platform timeout was reached. '
+            + 'To complete this workload, increase the run timeout in your Apify task settings, '
+            + 'or reduce its scope (e.g. lower maxResults, narrow the query/location, or '
+            + 'disable per-result detail enrichment).\n');
+      } catch {}
       setTimeout(() => process.exit(1), 200);
     }, cappedMs) as unknown as { unref?: () => void };
     guard.unref?.();
@@ -253,6 +317,7 @@ function install(): void {
   }
 }
 
-install();
-
-export {};
+// Auto-install in the actor runtime. Skipped under vitest so unit tests can
+// import the pure helpers (deadlineBufferMs / classifyDeadline) without
+// patching streams, arming exit handlers, or posting to the live sink.
+if (!env.VITEST) install();
