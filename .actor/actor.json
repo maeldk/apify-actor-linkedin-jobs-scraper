@@ -1,8 +1,8 @@
 {
     "actorSpecification": 1,
-    "name": "linkedin-jobs-scraper",
-    "title": "LinkedIn Job Monitor — Alerts + delta pricing",
-    "description": "Track linkedin.com jobs over time — title, company, location, full description, skills, AI summary, apply URL, and alerts. Recurring runs charge only for new or changed listings; already-seen jobs are skipped.",
+    "name": "linkedin-job-scraper",
+    "title": "LinkedIn Job Scraper 💰 $0.27/1K",
+    "description": "Track linkedin.com job postings over time — title, company, location, full description, skills, AI summary, apply URL, and alerts. Recurring runs charge only for new or changed listings; already-seen roles are skipped.",
     "version": "0.1",
     "buildTag": "latest",
     "readme": "../README.md",
@@ -95,9 +95,9 @@
                     },
                     "apify-default-dataset-item": {
                         "eventTitle": "Result",
-                        "eventDescription": "Single result in the default dataset. $1.00 per 1,000 jobs — pay only for fresh deltas in incremental mode.",
+                        "eventDescription": "Single result in the default dataset. $0.27 per 1,000 jobs — pay only for fresh deltas in incremental mode.",
                         "isOneTimeEvent": false,
-                        "eventPriceUsd": 0.001,
+                        "eventPriceUsd": 0.00027,
                         "isPrimaryEvent": true
                     }
                 }

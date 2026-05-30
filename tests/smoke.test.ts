@@ -50,7 +50,7 @@ describe('constants', () => {
     expect(DEFAULTS.maxResults).toBe(100);
     expect(DEFAULTS.pageSize).toBe(10);
     expect(DEFAULTS.paginationHardCap).toBe(1000);
-    expect(DEFAULTS.pricePerResult).toBe(0.001);
+    expect(DEFAULTS.pricePerResult).toBe(0.00027);
   });
 
   it('COMPACT_FIELDS includes core LinkedIn fields', () => {

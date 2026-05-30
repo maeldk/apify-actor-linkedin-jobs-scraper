@@ -12,7 +12,7 @@ export const DEFAULTS = {
   paginationHardCap: 1000,
   defaultLinkedinHost: 'www',
   defaultOutputLanguage: 'en-US,en;q=0.9',
-  pricePerResult: 0.001,
+  pricePerResult: 0.00027,
 } as const;
 
 export const COMPACT_FIELDS = new Set([

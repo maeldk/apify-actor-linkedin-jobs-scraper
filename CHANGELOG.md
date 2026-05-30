@@ -2,6 +2,7 @@
 
 ## v0.1.0 (unreleased)
 
+- Rebranded store title to "LinkedIn Job Scraper 💰 $0.27/1K" (head-keyword first for Store search) and dropped per-result price from $0.001 to $0.00027 ($0.27 per 1,000 results); run-start fee unchanged at $0.0005.
 - Initial LinkedIn Job Monitor release.
 - Added public LinkedIn jobs search, detail enrichment, related-jobs expansion, paste-mode start URLs, region presets, Easy Apply, company, salary, exclusion, and agency filters.
 - Added incremental state with NEW/UPDATED/UNCHANGED/EXPIRED/REAPPEARED classification, repost detection, state locking, outputMode, and delta-pricing-safe description truncation.

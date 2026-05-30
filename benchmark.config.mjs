@@ -4,7 +4,7 @@
  * Usage: node _tools/benchmark-api.mjs <actor-dir> [--build]
  */
 export default {
-  name: 'linkedin-jobs-scraper',
+  name: 'linkedin-job-scraper',
 
   searchInputs: [
     { keywords: 'software engineer', geoId: '103644278', datePosted: 'last24h' },

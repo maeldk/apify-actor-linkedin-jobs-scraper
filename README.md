@@ -1,7 +1,7 @@
 
-## What does LinkedIn Job Monitor do?
+## What does LinkedIn Job Scraper do?
 
-LinkedIn Job Monitor tracks [linkedin.com](https://linkedin.com) searches over time — including apply URLs, company metadata, full descriptions, skills, AI-ready summaries, and location data. Other scrapers charge you for the same job every day; this actor charges only when a listing is new or changed in incremental mode.
+LinkedIn Job Scraper extracts [linkedin.com](https://linkedin.com) job postings — apply URLs, company metadata, full descriptions, skills, AI-ready summaries, and location data — at $0.27 per 1,000 results. Run it once for a one-off export, or schedule it: in incremental mode you are charged only when a listing is new or changed, so recurring monitoring and alerts stay cheap.
 
 **New to Apify?** [Sign up free](https://console.apify.com/sign-up?fpr=1h3gvi) and use the included $5 monthly platform credit to test this actor.
 
@@ -43,7 +43,7 @@ Key parameters:
 - **`salaryMin`** — Minimum annual salary (USD). Mapped to LinkedIn's nearest f_SB2 bucket. Post-filtered exactly.
 - **`salaryMax`** — Maximum annual salary. Post-filtered (LinkedIn has no native max filter).
 - **`salaryIncludeUnknown`** — When salaryMin/Max set, include jobs with no salary data. (default: `true`)
-- ...and 36 more parameters
+- ...and 37 more parameters
 
 ## Input examples
 
@@ -197,7 +197,7 @@ When `incremental: true`, each record also carries:
 
 ## How to scrape linkedin.com
 
-1. Go to [LinkedIn Job Monitor](https://apify.com/blackfalcondata/linkedin-jobs-scraper?fpr=1h3gvi) in Apify Console.
+1. Go to [LinkedIn Job Scraper](https://apify.com/blackfalcondata/linkedin-job-scraper?fpr=1h3gvi) in Apify Console.
 2. Configure the input and optional location filter.
 3. Set `maxResults` to control how many results you need.
 4. Click **Start** and wait for the run to finish.
@@ -216,16 +216,18 @@ When `incremental: true`, each record also carries:
 
 ## How much does it cost to scrape linkedin.com?
 
-LinkedIn Job Monitor uses [pay-per-event](https://docs.apify.com/platform/actors/paid-actors/pay-per-event) pricing. You pay a small fee when the run starts and then for each result that is actually produced.
+LinkedIn Job Scraper uses [pay-per-event](https://docs.apify.com/platform/actors/paid-actors/pay-per-event) pricing. You pay a small fee when the run starts and then for each result that is actually produced.
 
 - **Run start:** $0.0005 per run
-- **Per result:** $0.001 per job record
+- **Per result:** $0.00027 per job record
 
 Example costs:
 
-- 10 results: **$0.01**
-- 100 results: **$0.1**
-- 500 results: **$0.5**
+- 10 results: **$0.0032**
+- 25 results: **$0.00725**
+- 100 results: **$0.03**
+- 200 results: **$0.05**
+- 500 results: **$0.14**
 
 ### Example: recurring monitoring savings
 
@@ -235,13 +237,13 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 | Churn rate | Full re-scrape run cost | Incremental run cost | Savings vs full re-scrape | Monthly cost after baseline |
 |---|---:|---:|---:|---:|
-| 5% — stable niche query | $0.25 | $0.01 | $0.24 (95%) | $0.39 |
-| 15% — moderate broad query | $0.25 | $0.04 | $0.21 (85%) | $1.14 |
-| 30% — high-volume aggregator | $0.25 | $0.08 | $0.17 (70%) | $2.27 |
+| 5% — stable niche query | $0.07 | $0.00387 | $0.06 (94%) | $0.12 |
+| 15% — moderate broad query | $0.07 | $0.01 | $0.06 (84%) | $0.32 |
+| 30% — high-volume aggregator | $0.07 | $0.02 | $0.05 (69%) | $0.62 |
 
-Full re-scrape monthly cost at daily polling: $7.51. First month with incremental costs $0.63 / $1.35 / $2.44 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
+Full re-scrape monthly cost at daily polling: $2.04. First month with incremental costs $0.18 / $0.38 / $0.67 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:f20ec594b60ebede","computedAt":"2026-05-17T02:26:13.602Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T16:12:25.482Z","version":1} -->
 
 ## FAQ
 
@@ -249,19 +251,19 @@ Full re-scrape monthly cost at daily polling: $7.51. First month with incrementa
 
 The number of results depends on the search query and available listings on linkedin.com. Use the `maxResults` parameter to control how many results are returned per run.
 
-### Does LinkedIn Job Monitor support recurring monitoring?
+### Does LinkedIn Job Scraper support recurring monitoring?
 
 Yes. Enable incremental mode to only receive new or changed listings on subsequent runs. This is ideal for scheduled monitoring where you want to track changes over time without re-processing the full dataset.
 
-### Can I integrate LinkedIn Job Monitor with other apps?
+### Can I integrate LinkedIn Job Scraper with other apps?
 
-Yes. LinkedIn Job Monitor works with Apify's [integrations](https://apify.com/integrations?fpr=1h3gvi) to connect with tools like Zapier, Make, Google Sheets, Slack, and more. You can also use webhooks to trigger actions when a run completes.
+Yes. LinkedIn Job Scraper works with Apify's [integrations](https://apify.com/integrations?fpr=1h3gvi) to connect with tools like Zapier, Make, Google Sheets, Slack, and more. You can also use webhooks to trigger actions when a run completes.
 
-### Can I use LinkedIn Job Monitor with the Apify API?
+### Can I use LinkedIn Job Scraper with the Apify API?
 
 Yes. You can start runs, manage inputs, and retrieve results programmatically through the [Apify API](https://docs.apify.com/api/v2). Client libraries are available for JavaScript, Python, and other languages.
 
-### Can I use LinkedIn Job Monitor through an MCP Server?
+### Can I use LinkedIn Job Scraper through an MCP Server?
 
 Yes. Apify provides an [MCP Server](https://apify.com/apify/actors-mcp-server?fpr=1h3gvi) that lets AI assistants and agents call this actor directly. Use compact mode and `descriptionMaxLength` to keep payloads manageable for LLM context windows.
 
@@ -271,7 +273,7 @@ This actor extracts publicly available data from linkedin.com. Web scraping of p
 
 ### Your feedback
 
-If you have questions, need a feature, or found a bug, please [open an issue](https://apify.com/blackfalcondata/linkedin-jobs-scraper/issues?fpr=1h3gvi) on the actor's page in Apify Console. Your feedback helps us improve.
+If you have questions, need a feature, or found a bug, please [open an issue](https://apify.com/blackfalcondata/linkedin-job-scraper/issues?fpr=1h3gvi) on the actor's page in Apify Console. Your feedback helps us improve.
 
 ## You might also like
 
@@ -282,7 +284,7 @@ If you have questions, need a feature, or found a bug, please [open an issue](ht
 - [Arbeitsagentur Scraper - German Jobs](https://apify.com/blackfalcondata/arbeitsagentur-scraper?fpr=1h3gvi) — Scrape arbeitsagentur.de - Germany’s official employment portal with 1M+ listings. Contact data,.
 - [Arbetsformedlingen Job Scraper](https://apify.com/blackfalcondata/arbetsformedlingen-scraper?fpr=1h3gvi) — Scrape arbetsformedlingen.se (Platsbanken) — Sweden's official employment portal. Returns 84.
 - [AutoScout24 Scraper — European Car Listings with Dealer Data](https://apify.com/blackfalcondata/autoscout24-scraper?fpr=1h3gvi) — Scrape autoscout24.com - Europe's largest used car marketplace with 770K+ listings. Structured.
-- [Bayt.com Scraper — MENA Jobs with Salary & Skills Filter](https://apify.com/blackfalcondata/bayt-scraper?fpr=1h3gvi) — Scrape bayt.com — the leading Middle East job board covering UAE, Saudi Arabia, Qatar, Egypt.
+- [Bayt.com Scraper — MENA Jobs with Salary & Skills Filter](https://apify.com/blackfalcondata/bayt-scraper?fpr=1h3gvi) — Scrape bayt.com — leading Middle East job board covering UAE, Saudi Arabia, Qatar, Egypt and 9 more.
 
 ## Getting started with Apify
 

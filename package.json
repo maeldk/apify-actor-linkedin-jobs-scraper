@@ -1,5 +1,5 @@
 {
-    "name": "linkedin-jobs-scraper",
+    "name": "linkedin-job-scraper",
     "version": "0.1.0",
     "type": "module",
     "description": "LinkedIn job scraper with cross-run delta pricing — pay only for new/changed listings.",
