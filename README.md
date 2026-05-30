@@ -32,8 +32,8 @@ The main inputs are an optional location filter and a result limit. Additional f
 Key parameters:
 
 - **`keywords`** — Job search keywords (e.g. "software engineer", "nurse"). Leave blank to browse all jobs in the selected location.
-- **`location`** — Free-text location (e.g. "Copenhagen, Denmark", "United States"). Use geoIds for higher precision.
-- **`geoIds`** — Numeric LinkedIn geoIds (e.g. "103644278" = United States). Each geoId becomes a separate query, deduped on jobId. (default: `[]`)
+- **`location`** — City, state, region, or country (e.g. "Berlin, Germany", "United States"). LinkedIn resolves it for you — no IDs needed. Leave empty for global results.
+- **`geoIds`** — Advanced/optional override — most users just use 📍 Location, which LinkedIn resolves automatically. For exact targeting, paste a LinkedIn jobs search URL into 🔗 Start URLs (the geoId is read for you), or copy the numeric geoId from a LinkedIn jobs URL. Each geoId becomes a separate query, deduped on jobId. (default: `[]`)
 - **`regions`** — Two-letter country codes (e.g. "US", "GB", "DE"). Resolved to LinkedIn country geoIds. Use geoIds[] for unsupported markets. (default: `[]`)
 - **`regionPresets`** — Pre-defined country grouping. Combined with regions[] if both are set.
 - **`datePosted`** — Filter by posting recency. "lastHour" is unique to this scraper. (default: `"anytime"`)
@@ -243,7 +243,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $2.04. First month with incremental costs $0.18 / $0.38 / $0.67 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T16:12:25.482Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T17:00:47.215Z","version":1} -->
 
 ## FAQ
 

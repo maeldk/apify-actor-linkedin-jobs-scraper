@@ -1,6 +1,6 @@
 {
     "title": "LinkedIn Jobs Scraper",
-    "description": "Scrape LinkedIn job postings via the public guest API. Set 🔍 Keywords + 📍 Location (or 🌍 geoIds) to start. Use incrementalMode + stateKey for cross-run delta pricing — never charged for already-seen jobs.\n\nTo start, provide 🔗 Start URLs to scrape specific pages. Set 💯 Max Results to control volume (0 = unlimited).",
+    "description": "Scrape LinkedIn job postings via the public guest API. Set 🔍 Keywords + 📍 Location to start — LinkedIn resolves the location for you, no IDs needed. Use incrementalMode + stateKey for cross-run delta pricing — never charged for already-seen jobs.\n\nTip: paste a LinkedIn jobs search URL into 🔗 Start URLs to reuse all of its filters. Set 💯 Max Results to control volume (0 = unlimited).",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
@@ -14,13 +14,13 @@
         },
         "location": {
             "title": "📍 Location",
-            "description": "Free-text location (e.g. \"Copenhagen, Denmark\", \"United States\"). Use geoIds for higher precision.",
+            "description": "City, state, region, or country (e.g. \"Berlin, Germany\", \"United States\"). LinkedIn resolves it for you — no IDs needed. Leave empty for global results.",
             "type": "string",
             "editor": "textfield"
         },
         "geoIds": {
-            "title": "🌍 LinkedIn geoIds",
-            "description": "Numeric LinkedIn geoIds (e.g. \"103644278\" = United States). Each geoId becomes a separate query, deduped on jobId.",
+            "title": "🌍 LinkedIn geoId (advanced)",
+            "description": "Advanced/optional override — most users just use 📍 Location, which LinkedIn resolves automatically. For exact targeting, paste a LinkedIn jobs search URL into 🔗 Start URLs (the geoId is read for you), or copy the numeric geoId from a LinkedIn jobs URL. Each geoId becomes a separate query, deduped on jobId.",
             "type": "array",
             "editor": "stringList",
             "default": []
