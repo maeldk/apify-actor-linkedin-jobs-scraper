@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSearchUrl, parseSearchCards, fetchRelatedJobs } from '../src/apiClient.js';
+import { buildSearchUrl, parseSearchCards, fetchRelatedJobs, searchJobs, detectParseDrift } from '../src/apiClient.js';
 
 describe('buildSearchUrl', () => {
   it('builds canonical SERP URL with required params', () => {
@@ -196,5 +196,44 @@ describe('fetchRelatedJobs', () => {
     }) as unknown as typeof globalThis.fetch;
     await fetchRelatedJobs('1234', { fetchFn: fakeFetch, linkedinHost: 'de' });
     expect(captured).toContain('https://de.linkedin.com/');
+  });
+});
+
+describe('detectParseDrift', () => {
+  it('flags drift when job-posting markers are present but 0 cards parsed', () => {
+    // LinkedIn rotated the <li> card wrapper → the stable urn marker is still
+    // in the body, but parseSearchCards (which keys on <li>) matches nothing.
+    const html = '<article><div data-entity-urn="urn:li:jobPosting:123"></div></article>';
+    expect(parseSearchCards(html)).toHaveLength(0);   // parser can't match the new markup
+    expect(detectParseDrift(html, 0)).toBe(true);
+  });
+
+  it('does NOT flag drift on a genuinely empty result (no job markers in body)', () => {
+    const html = '<ul class="jobs-search__results-list"></ul>';
+    expect(detectParseDrift(html, 0)).toBe(false);
+  });
+
+  it('does NOT flag drift when cards parsed successfully', () => {
+    const html = '<li><div data-entity-urn="urn:li:jobPosting:123"></div></li>';
+    expect(detectParseDrift(html, 5)).toBe(false);
+  });
+});
+
+describe('searchJobs parse-drift guard', () => {
+  it('throws a parse error when SERP has job markers but 0 cards parse (markup drift)', async () => {
+    const drifted = '<article><div data-entity-urn="urn:li:jobPosting:999"></div></article>';
+    const fakeFetch: typeof globalThis.fetch = (async () =>
+      ({ ok: true, status: 200, text: async () => drifted } as Response)) as unknown as typeof globalThis.fetch;
+    await expect(searchJobs({ keywords: 'engineer' }, 0, { fetchFn: fakeFetch }))
+      .rejects.toThrow(/parse/i);
+  });
+
+  it('returns empty without throwing on a genuinely empty SERP', async () => {
+    const empty = '<ul class="jobs-search__results-list"></ul>';
+    const fakeFetch: typeof globalThis.fetch = (async () =>
+      ({ ok: true, status: 200, text: async () => empty } as Response)) as unknown as typeof globalThis.fetch;
+    const res = await searchJobs({ keywords: 'engineer' }, 0, { fetchFn: fakeFetch });
+    expect(res.jobs).toHaveLength(0);
+    expect(res.hasNextPage).toBe(false);
   });
 });

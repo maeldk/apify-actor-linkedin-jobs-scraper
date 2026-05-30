@@ -222,6 +222,21 @@ export function parseSearchCards(html: string): ApiJob[] {
 }
 
 /**
+ * Detect SERP parse drift: the response body clearly contains job-posting cards
+ * (LinkedIn's stable `data-entity-urn="urn:li:jobPosting:<id>"` marker) but
+ * parseSearchCards extracted none — i.e. the card markup rotated and the parser
+ * silently returned []. Lets searchJobs throw (→ LIN-3001) instead of reporting a
+ * green run with zero results — the core "silent empty success" failure mode.
+ *
+ * Precise by construction: a genuinely empty result set carries no urn markers,
+ * so this never false-positives on a real "no jobs match this query".
+ */
+export function detectParseDrift(html: string, parsedCount: number): boolean {
+  if (parsedCount > 0) return false;
+  return /data-entity-urn="urn:li:jobPosting:\d+"/.test(html);
+}
+
+/**
  * When proxyUrl is set, route through `undici.fetch` + ProxyAgent (both from the userland
  * undici package — they MUST come from the same instance, otherwise Node's bundled fetch
  * rejects the foreign Request with UND_ERR_INVALID_ARG).
@@ -305,6 +320,11 @@ export async function searchJobs(
   }
   const html = await res.text();
   const jobs = parseSearchCards(html);
+  if (detectParseDrift(html, jobs.length)) {
+    // HTTP 200 with job markers in the body but 0 parsed → markup drift / soft
+    // block. Throw so the run fails visibly (LIN-3001) instead of silent empty.
+    throw new Error('parse.invalid_response: SERP returned job markers but 0 cards parsed (LinkedIn markup may have changed)');
+  }
   return {
     jobs,
     totalResults: 0,
