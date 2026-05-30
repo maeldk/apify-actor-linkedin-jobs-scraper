@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { parseDetail } from '../src/detailParser.js';
+import { parseDetail, extractSalaryFromText } from '../src/detailParser.js';
+
+describe('extractSalaryFromText', () => {
+  it('parses an annual range with /yr', () => {
+    expect(extractSalaryFromText('Base pay: $90,000.00/yr - $180,000.00/yr plus equity'))
+      .toEqual({ min: 90000, max: 180000, currency: 'USD', period: 'YEAR' });
+  });
+  it('parses an hourly range', () => {
+    expect(extractSalaryFromText('Pay range $45/hr - $60/hr'))
+      .toEqual({ min: 45, max: 60, currency: 'USD', period: 'HOUR' });
+  });
+  it('parses a single annual value', () => {
+    expect(extractSalaryFromText('Salary: $125,000/yr'))
+      .toEqual({ min: 125000, max: null, currency: 'USD', period: 'YEAR' });
+  });
+  it('infers YEAR for K-suffixed ranges without a period token', () => {
+    expect(extractSalaryFromText('$90K - $180K DOE'))
+      .toEqual({ min: 90000, max: 180000, currency: 'USD', period: 'YEAR' });
+  });
+  it('returns null when no salary is present', () => {
+    expect(extractSalaryFromText('Competitive salary and great benefits')).toBeNull();
+    expect(extractSalaryFromText('a $5 gift card')).toBeNull();
+  });
+});
 
 const SAMPLE = `
 <html><body>

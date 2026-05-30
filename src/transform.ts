@@ -406,6 +406,11 @@ export function mergeDetail(item: OutputItem, detail: ParsedDetail, phoneMode: P
     jobFunction: detail.jobFunction ?? item.jobFunction,
     workplaceType: detail.workplaceType ?? item.workplaceType,
     applicantCount: detail.applicantCount ?? item.applicantCount,
+    salaryMin: detail.salary?.min ?? item.salaryMin,
+    salaryMax: detail.salary?.max ?? item.salaryMax,
+    salaryCurrency: detail.salary?.currency ?? item.salaryCurrency,
+    salaryPeriod: detail.salary?.period ?? item.salaryPeriod,
+    salarySource: detail.salary ? 'description_extract' : item.salarySource,
     contentHash: buildContentHash({
       title: item.title,
       company: item.company,
