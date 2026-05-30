@@ -20,7 +20,7 @@ import { logRunFooter } from './runFooter.js';
 import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
 import { GEOID_TO_ISO2, resolveRegions } from './regionResolver.js';
 import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost } from './inputNormalize.js';
-
+
 import { applyDescriptionFormat, normalizeDescriptionFormat } from './descriptionFormat.js';
 import { maybeStripEmpty } from './emitFilter.js';
 import { classifyFallbackErrCode, type ErrCodeMap } from './errCodeClassifier.js';
@@ -34,9 +34,24 @@ const FALLBACK_ERR_CODES: ErrCodeMap = {
   lockLost: '4001',
 };
 
-async function failWith(internalCause: unknown, code: ErrCode, runStartTs: number, emitted: number, unchangedSkipped: number): Promise<never> {
+// Module handles populated inside main() so the top-level .catch() can run
+// lock cleanup, kill the heartbeat, and route the terminal event through the
+// same emitTerminal closure used by inner failWith calls.
+let activeRunStartTs = Date.now();
+let activeClearHeartbeat: (() => void) | null = null;
+let activeReleaseLock: (() => Promise<void>) | null = null;
+let activeEmitTerminal: typeof emit = emit;
+
+async function failWith(
+  internalCause: unknown,
+  code: ErrCode,
+  runStartTs: number,
+  emitted: number,
+  unchangedSkipped: number,
+  emitTerminal: typeof emit = emit,
+): Promise<never> {
   const effectiveCode: ErrCode = internalCause instanceof UserSafeError ? internalCause.code : classifyFallbackErrCode(internalCause, code, 'LIN', FALLBACK_ERR_CODES) as ErrCode;
-  await emit({
+  await emitTerminal({
     type: 'run.complete',
     code: effectiveCode,
     payload: { emitted, unchangedSkipped, totalReviews: emitted + unchangedSkipped, status: 'failed', ok: false, durationMs: Date.now() - runStartTs },
@@ -291,12 +306,23 @@ async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: strin
 async function main() {
   await Actor.init();
   const runStartTs = Date.now();
+  activeRunStartTs = runStartTs;
   let emittedCount = 0;
   let unchangedSkipped = 0;
   const heartbeatInterval = setInterval(() => {
     void emit({ type: 'info', detail: 'heartbeat', payload: { elapsedMs: Date.now() - runStartTs } });
   }, 60_000);
   if (typeof heartbeatInterval.unref === 'function') heartbeatInterval.unref();
+  activeClearHeartbeat = () => clearInterval(heartbeatInterval);
+
+  // Idempotent terminal emit — see module-level commentary on activeEmitTerminal.
+  let terminalEmitted = false;
+  const emitTerminal: typeof emit = async (event) => {
+    if (terminalEmitted) return;
+    terminalEmitted = true;
+    await emit(event);
+  };
+  activeEmitTerminal = emitTerminal;
 
   try { await Actor.charge({ eventName: 'apify-actor-start', count: 1 }); } catch { /* non-PPE */ }
 
@@ -321,7 +347,7 @@ async function main() {
     log.debug(`Auto-derived stateKey: ${input.stateKey}`);
   }
   if (!input.keywords && !input.geoIds.length && !input.regions.length && !input.regionPresets && !input.location && !input.startUrls.length) {
-    await failWith(new Error('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.'), 'LIN-1001', runStartTs, 0, 0);
+    await failWith(new Error('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.'), 'LIN-1001', runStartTs, 0, 0, emitTerminal);
   }
   if (input.regions.length > 0 || input.regionPresets) {
     const expanded = expandGeoIds(input);
@@ -358,10 +384,10 @@ async function main() {
       hardExitSuccess: () => process.exit(0),
       hardExitFailure: () => process.exit(1),
       onLockBusy: async (_b) => {
-        await emit({ type: 'run.complete', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'success', ok: true, durationMs: Date.now() - runStartTs, reason: 'lock_busy' } });
+        await emitTerminal({ type: 'run.complete', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'success', ok: true, durationMs: Date.now() - runStartTs, reason: 'lock_busy' } });
       },
       onIncrementalUnavailableFail: async (un) => {
-        await emit({ type: 'run.complete', code: 'LIN-4002', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'failed', ok: false, durationMs: Date.now() - runStartTs }, cause: un.error });
+        await emitTerminal({ type: 'run.complete', code: 'LIN-4002', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'failed', ok: false, durationMs: Date.now() - runStartTs }, cause: un.error });
       },
     };
 
@@ -393,6 +419,7 @@ async function main() {
       catch (e) { log.warning(`Failed to release lock: ${e instanceof Error ? e.message : e}`); }
     }
   };
+  activeReleaseLock = releaseLock;
 
   const scrapedAt = new Date().toISOString();
 
@@ -593,7 +620,7 @@ async function main() {
       const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
       const currentLock = await stateKv.getValue<StateLock>(lockKey);
       if (!verifyLock(currentLock, runId)) {
-        await failWith(new Error('state lock lost during run'), 'LIN-4001', runStartTs, emittedCount ?? 0, unchangedSkipped ?? 0);
+        await failWith(new Error('state lock lost during run'), 'LIN-4001', runStartTs, emittedCount ?? 0, unchangedSkipped ?? 0, emitTerminal);
       }
       await stateKv.setValue(stateKvKey(input.stateKey), buildUpdatedState(input.stateKey, scrapedAt, priorState, classifications, snapshots));
 
@@ -632,12 +659,12 @@ async function main() {
     }
   } catch (e) {
     if (e instanceof Error && /^\[LIN-\d{4}\]/.test(e.message)) throw e;
-    await failWith(e, 'LIN-9000', runStartTs, emittedCount, unchangedSkipped);
+    await failWith(e, 'LIN-9000', runStartTs, emittedCount, unchangedSkipped, emitTerminal);
   } finally {
     await releaseLock();
   }
 
-  await emit({ type: 'run.complete', payload: { emitted: emittedCount, unchangedSkipped, totalReviews: emittedCount + unchangedSkipped, status: 'success', ok: true, durationMs: Date.now() - runStartTs } });
+  await emitTerminal({ type: 'run.complete', payload: { emitted: emittedCount, unchangedSkipped, totalReviews: emittedCount + unchangedSkipped, status: 'success', ok: true, durationMs: Date.now() - runStartTs } });
 
 
   await Actor.exit();
@@ -741,5 +768,9 @@ function applyFinalFilters(data: Record<string, unknown> | Record<string, unknow
   return maybeStripEmpty(formatted, input.excludeEmptyFields) as Record<string, unknown>;
 }
 
-await main();
+await main().catch(async (err) => {
+  activeClearHeartbeat?.();
+  await activeReleaseLock?.();
+  await failWith(err, 'LIN-9000', activeRunStartTs, 0, 0, activeEmitTerminal);
+});
 
