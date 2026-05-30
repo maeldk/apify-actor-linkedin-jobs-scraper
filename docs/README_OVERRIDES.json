@@ -1,5 +1,5 @@
 {
-  "intro": "LinkedIn Job Scraper extracts [linkedin.com](https://linkedin.com) job postings — apply URLs, company metadata, full descriptions, skills, AI-ready summaries, and location data — at $0.27 per 1,000 results. Run it once for a one-off export, or schedule it: in incremental mode you are charged only when a listing is new or changed, so recurring monitoring and alerts stay cheap.",
+  "intro": "LinkedIn Job Scraper extracts [linkedin.com](https://linkedin.com) job postings — full descriptions, salary, skills, apply URLs, AI-ready summaries, and employer details (company size, website, industry) — with no login or cookies, at $0.27 per 1,000 results. Run a one-off export, or enable incremental mode to skip already-seen jobs on recurring runs.",
   "keyFeatures": [
     "**♻️ Incremental mode** — recurring runs emit only NEW / UPDATED / REAPPEARED records; UNCHANGED and EXPIRED are opt-in. First run builds the baseline; subsequent runs emit and charge only for the diff.",
     "**🔔 Notifications** — Telegram, Slack, Discord, WhatsApp Cloud API, and generic webhook outputs. Pair with incremental + `notifyOnlyChanges` for daily new-job alerts.",
