@@ -2,7 +2,7 @@
     "actorSpecification": 1,
     "name": "linkedin-job-scraper",
     "title": "LinkedIn Job Scraper 💰 $0.27/1K",
-    "description": "Scrape LinkedIn job postings with full descriptions, salary, skills, and employer details (company size, website, industry) — no login or cookies. Clean structured output for hiring research, lead generation, and job aggregation. Incremental mode optionally skips already-seen jobs on recurring runs.",
+    "description": "Scrape linkedin.com job postings with full descriptions, salary, skills, and employer details (company size, website, industry) — no login or cookies. Clean structured output for hiring research, lead generation, and job aggregation. Incremental mode optionally skips already-seen jobs on recurring runs.",
     "version": "0.1",
     "buildTag": "latest",
     "readme": "../README.md",

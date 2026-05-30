@@ -1,7 +1,7 @@
 
 ## What does LinkedIn Job Scraper do?
 
-LinkedIn Job Scraper extracts [linkedin.com](https://linkedin.com) job postings — apply URLs, company metadata, full descriptions, skills, AI-ready summaries, and location data — at $0.27 per 1,000 results. Run it once for a one-off export, or schedule it: in incremental mode you are charged only when a listing is new or changed, so recurring monitoring and alerts stay cheap.
+LinkedIn Job Scraper extracts [linkedin.com](https://linkedin.com) job postings — full descriptions, salary, skills, apply URLs, AI-ready summaries, and employer details (company size, website, industry) — with no login or cookies, at $0.27 per 1,000 results. Run a one-off export, or enable incremental mode to skip already-seen jobs on recurring runs.
 
 **New to Apify?** [Sign up free](https://console.apify.com/sign-up?fpr=1h3gvi) and use the included $5 monthly platform credit to test this actor.
 
@@ -243,7 +243,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $2.04. First month with incremental costs $0.18 / $0.38 / $0.67 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T17:42:56.799Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T19:09:43.197Z","version":1} -->
 
 ## FAQ
 
