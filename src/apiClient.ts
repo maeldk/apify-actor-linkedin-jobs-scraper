@@ -236,6 +236,88 @@ export function detectParseDrift(html: string, parsedCount: number): boolean {
   return /data-entity-urn="urn:li:jobPosting:\d+"/.test(html);
 }
 
+export interface CompanyInfo {
+  name: string | null;
+  description: string | null;
+  website: string | null;
+  employeeCount: number | null;
+  logo: string | null;
+  address: {
+    street: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    country: string | null;
+  } | null;
+}
+
+/** Recursively locate the first Organization node in a JSON-LD value (object, array, or @graph). */
+function findOrganization(node: unknown): Record<string, unknown> | null {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findOrganization(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (node && typeof node === 'object') {
+    const obj = node as Record<string, unknown>;
+    const type = obj['@type'];
+    if (type === 'Organization' || (Array.isArray(type) && type.includes('Organization'))) return obj;
+    if (Array.isArray(obj['@graph'])) return findOrganization(obj['@graph']);
+  }
+  return null;
+}
+
+/**
+ * Extract company enrichment fields from a public LinkedIn company page's
+ * `<script type="application/ld+json">` Organization block. Robust (structured
+ * JSON, not CSS classes). Returns all-null when no Organization node is present.
+ */
+export function parseCompanyJsonLd(html: string): CompanyInfo {
+  const empty: CompanyInfo = { name: null, description: null, website: null, employeeCount: null, logo: null, address: null };
+  const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+  const re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    let data: unknown;
+    try { data = JSON.parse(m[1].trim()); } catch { continue; }
+    const org = findOrganization(data);
+    if (!org) continue;
+
+    const numEmp = org['numberOfEmployees'];
+    const employeeCount =
+      numEmp && typeof numEmp === 'object' && typeof (numEmp as Record<string, unknown>)['value'] === 'number'
+        ? (numEmp as Record<string, number>)['value']
+        : typeof numEmp === 'number' ? numEmp : null;
+
+    const logoNode = org['logo'];
+    const logo = typeof logoNode === 'string'
+      ? logoNode
+      : logoNode && typeof logoNode === 'object' ? str((logoNode as Record<string, unknown>)['contentUrl']) : null;
+
+    const addr = org['address'];
+    const address = addr && typeof addr === 'object' ? {
+      street: str((addr as Record<string, unknown>)['streetAddress']),
+      city: str((addr as Record<string, unknown>)['addressLocality']),
+      region: str((addr as Record<string, unknown>)['addressRegion']),
+      postalCode: str((addr as Record<string, unknown>)['postalCode']),
+      country: str((addr as Record<string, unknown>)['addressCountry']),
+    } : null;
+
+    const desc = str(org['description']);
+    return {
+      name: str(org['name']),
+      description: desc ? decodeHtmlEntities(desc) : null,
+      website: str(org['sameAs']),
+      employeeCount,
+      logo,
+      address,
+    };
+  }
+  return empty;
+}
+
 /**
  * When proxyUrl is set, route through `undici.fetch` + ProxyAgent (both from the userland
  * undici package — they MUST come from the same instance, otherwise Node's bundled fetch

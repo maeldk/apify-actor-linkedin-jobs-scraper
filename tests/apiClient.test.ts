@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSearchUrl, parseSearchCards, fetchRelatedJobs, searchJobs, detectParseDrift } from '../src/apiClient.js';
+import { buildSearchUrl, parseSearchCards, fetchRelatedJobs, searchJobs, detectParseDrift, parseCompanyJsonLd } from '../src/apiClient.js';
 
 describe('buildSearchUrl', () => {
   it('builds canonical SERP URL with required params', () => {
@@ -235,5 +235,44 @@ describe('searchJobs parse-drift guard', () => {
     const res = await searchJobs({ keywords: 'engineer' }, 0, { fetchFn: fakeFetch });
     expect(res.jobs).toHaveLength(0);
     expect(res.hasNextPage).toBe(false);
+  });
+});
+
+describe('parseCompanyJsonLd', () => {
+  // Faithful minimal fixture from a real public LinkedIn company page's
+  // <script type="application/ld+json"> Organization block (verified guest-side).
+  const COMPANY_HTML = `<html><head>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"SMSI Group","description":"SMSI is dedicated to providing the highest quality turn-key facility solutions","sameAs":"https://www.smsi.group","numberOfEmployees":{"value":80,"@type":"QuantitativeValue"},"logo":{"contentUrl":"https://media.licdn.com/dms/image/smsigroup_logo","@type":"ImageObject"},"address":{"@type":"PostalAddress","streetAddress":"2960 N Eastgate Ave","addressLocality":"Springfield","addressRegion":"Missouri","postalCode":"65803","addressCountry":"US"}}
+</script></head><body>...</body></html>`;
+
+  it('extracts company fields from the Organization JSON-LD block', () => {
+    const c = parseCompanyJsonLd(COMPANY_HTML);
+    expect(c.name).toBe('SMSI Group');
+    expect(c.description).toContain('turn-key facility solutions');
+    expect(c.website).toBe('https://www.smsi.group');
+    expect(c.employeeCount).toBe(80);
+    expect(c.logo).toContain('licdn.com');
+    expect(c.address).toEqual({
+      street: '2960 N Eastgate Ave',
+      city: 'Springfield',
+      region: 'Missouri',
+      postalCode: '65803',
+      country: 'US',
+    });
+  });
+
+  it('finds the Organization inside an @graph wrapper', () => {
+    const html = `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},{"@type":"Organization","name":"Acme","sameAs":"https://acme.test"}]}</script>`;
+    const c = parseCompanyJsonLd(html);
+    expect(c.name).toBe('Acme');
+    expect(c.website).toBe('https://acme.test');
+  });
+
+  it('returns all-null when there is no Organization JSON-LD', () => {
+    const c = parseCompanyJsonLd('<html><body>no structured data here</body></html>');
+    expect(c.name).toBeNull();
+    expect(c.employeeCount).toBeNull();
+    expect(c.address).toBeNull();
   });
 });
