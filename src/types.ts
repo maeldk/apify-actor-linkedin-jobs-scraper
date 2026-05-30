@@ -56,6 +56,7 @@ export interface Input {
   emitExpired?: boolean;
   skipReposts?: boolean;
   enrichDetails?: boolean;
+  scrapeCompany?: boolean;
 
   // ── Discovery
   discoverRelated?: boolean;
@@ -123,6 +124,7 @@ export interface NormalizedInput {
   emitExpired: boolean;
   skipReposts: boolean;
   enrichDetails: boolean;
+  scrapeCompany: boolean;
 
   discoverRelated: boolean;
   relatedSeedCount: number;

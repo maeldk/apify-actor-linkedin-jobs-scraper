@@ -1,6 +1,6 @@
 import { DEFAULTS } from './constants.js';
 import type { Input, NormalizedInput } from './types.js';
-
+
 import { normalizeDescriptionFormat } from './descriptionFormat.js';
 export function cleanString(value: string | null | undefined): string | undefined {
   const cleaned = value?.replace(/\s+/g, ' ').trim();
@@ -79,6 +79,7 @@ export function normalizeInput(raw: Partial<Input>): NormalizedInput {
     emitExpired: raw.emitExpired ?? false,
     skipReposts: raw.skipReposts ?? false,
     enrichDetails: raw.enrichDetails ?? false,
+    scrapeCompany: raw.scrapeCompany ?? false,
 
     discoverRelated: raw.discoverRelated ?? false,
     relatedSeedCount: Math.max(0, raw.relatedSeedCount ?? 5),

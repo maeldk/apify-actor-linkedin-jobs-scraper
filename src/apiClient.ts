@@ -318,6 +318,35 @@ export function parseCompanyJsonLd(html: string): CompanyInfo {
   return empty;
 }
 
+/** Extract the company slug from a LinkedIn company URL (e.g. .../company/<slug>), or null. */
+export function companySlugFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  const m = /\/company\/([^/?#]+)/.exec(url);
+  return m ? m[1] : null;
+}
+
+/**
+ * Fetch + parse a public LinkedIn company page's Organization JSON-LD.
+ * One request per company (caller dedups). Returns null on non-200 / fetch error.
+ */
+export async function fetchCompanyInfo(
+  slug: string,
+  opts?: ApiClientOptions & { outputLanguage?: string; linkedinHost?: string },
+): Promise<CompanyInfo | null> {
+  const fetchFn = opts?.fetchFn ?? globalThis.fetch;
+  const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const language = opts?.outputLanguage ?? DEFAULT_ACCEPT_LANG;
+  const host = opts?.linkedinHost ?? 'www';
+  const url = `https://${host}.linkedin.com/company/${encodeURIComponent(slug)}`;
+  try {
+    const res = await fetchWithRetry(url, fetchFn, timeoutMs, language, opts?.proxyUrl);
+    if (!res.ok) return null;
+    return parseCompanyJsonLd(await res.text());
+  } catch {
+    return null;
+  }
+}
+
 /**
  * When proxyUrl is set, route through `undici.fetch` + ProxyAgent (both from the userland
  * undici package — they MUST come from the same instance, otherwise Node's bundled fetch

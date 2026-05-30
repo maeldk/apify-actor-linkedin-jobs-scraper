@@ -280,6 +280,13 @@
             "default": false,
             "prefill": false
         },
+        "scrapeCompany": {
+            "title": "🏢 Scrape company details",
+            "description": "For each job, fetch the employer's public LinkedIn company page and add company description, website, employee count, logo, and address. Fetched once per unique company.",
+            "type": "boolean",
+            "default": false,
+            "prefill": false
+        },
         "discoverRelated": {
             "title": "🔭 Expand via relatedJobs",
             "description": "After the main SERP, fetch LinkedIn's relatedJobs feed for the first N results to discover jobs that don't surface on the keyword search. Useful for thin markets.",

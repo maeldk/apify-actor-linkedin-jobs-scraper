@@ -43,7 +43,7 @@ Key parameters:
 - **`salaryMin`** — Minimum annual salary (USD). Mapped to LinkedIn's nearest f_SB2 bucket. Post-filtered exactly.
 - **`salaryMax`** — Maximum annual salary. Post-filtered (LinkedIn has no native max filter).
 - **`salaryIncludeUnknown`** — When salaryMin/Max set, include jobs with no salary data. (default: `true`)
-- ...and 37 more parameters
+- ...and 38 more parameters
 
 ## Input examples
 
@@ -243,7 +243,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $2.04. First month with incremental costs $0.18 / $0.38 / $0.67 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T17:00:47.215Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T17:42:56.799Z","version":1} -->
 
 ## FAQ
 

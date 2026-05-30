@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSearchUrl, parseSearchCards, fetchRelatedJobs, searchJobs, detectParseDrift, parseCompanyJsonLd } from '../src/apiClient.js';
+import { buildSearchUrl, parseSearchCards, fetchRelatedJobs, searchJobs, detectParseDrift, parseCompanyJsonLd, companySlugFromUrl, fetchCompanyInfo } from '../src/apiClient.js';
 
 describe('buildSearchUrl', () => {
   it('builds canonical SERP URL with required params', () => {
@@ -274,5 +274,39 @@ describe('parseCompanyJsonLd', () => {
     expect(c.name).toBeNull();
     expect(c.employeeCount).toBeNull();
     expect(c.address).toBeNull();
+  });
+});
+
+describe('companySlugFromUrl', () => {
+  it('extracts the slug from a company URL', () => {
+    expect(companySlugFromUrl('https://www.linkedin.com/company/smsigroup')).toBe('smsigroup');
+  });
+  it('handles host, subpaths and query strings', () => {
+    expect(companySlugFromUrl('https://de.linkedin.com/company/smsi-group/life?trk=x')).toBe('smsi-group');
+  });
+  it('returns null for non-company URLs and null input', () => {
+    expect(companySlugFromUrl('https://www.linkedin.com/jobs/view/123')).toBeNull();
+    expect(companySlugFromUrl(null)).toBeNull();
+  });
+});
+
+describe('fetchCompanyInfo', () => {
+  const COMPANY_HTML = `<script type="application/ld+json">{"@type":"Organization","name":"SMSI Group","sameAs":"https://www.smsi.group","numberOfEmployees":{"value":80}}</script>`;
+  it('fetches /company/<slug> and returns parsed CompanyInfo', async () => {
+    let captured = '';
+    const fakeFetch: typeof globalThis.fetch = (async (url: string) => {
+      captured = url;
+      return { ok: true, status: 200, text: async () => COMPANY_HTML } as Response;
+    }) as unknown as typeof globalThis.fetch;
+    const info = await fetchCompanyInfo('smsigroup', { fetchFn: fakeFetch });
+    expect(captured).toBe('https://www.linkedin.com/company/smsigroup');
+    expect(info?.name).toBe('SMSI Group');
+    expect(info?.website).toBe('https://www.smsi.group');
+    expect(info?.employeeCount).toBe(80);
+  });
+  it('returns null on non-200', async () => {
+    const fakeFetch: typeof globalThis.fetch = (async () =>
+      ({ ok: false, status: 404, text: async () => '' } as Response)) as unknown as typeof globalThis.fetch;
+    expect(await fetchCompanyInfo('x', { fetchFn: fakeFetch })).toBeNull();
   });
 });

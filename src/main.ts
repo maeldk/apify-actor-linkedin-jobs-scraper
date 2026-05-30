@@ -2,7 +2,7 @@ import './diag-stream.js';
 import { Actor, log } from 'apify';
 import type { Input, NormalizedInput, OutputItem } from './types.js';
 import { DEFAULTS, COMPACT_FIELDS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from './constants.js';
-import { searchJobs, fetchJobDetail, fetchRelatedJobs, type SearchParams } from './apiClient.js';
+import { searchJobs, fetchJobDetail, fetchRelatedJobs, fetchCompanyInfo, companySlugFromUrl, type SearchParams, type CompanyInfo } from './apiClient.js';
 import type { ApiJob } from './apiClient.js';
 import { transformJob, mergeDetail, applyDescriptionMaxLength, inferCountryHintFromSearchLocation } from './transform.js';
 import { parseDetail } from './detailParser.js';
@@ -530,6 +530,48 @@ async function main() {
       });
       await Promise.all(workers);
       log.info(`Detail enrichment: ${enriched} enriched, ${failed} failed`);
+    }
+
+    // ── Optional company enrichment (one fetch per unique company) ───────
+    if (input.scrapeCompany && items.length > 0) {
+      const slugByIndex = new Map<number, string>();
+      const uniqueSlugs = new Set<string>();
+      items.forEach((it, idx) => {
+        const slug = companySlugFromUrl(it.companyUrl);
+        if (slug) { slugByIndex.set(idx, slug); uniqueSlugs.add(slug); }
+      });
+      log.info('Scanning company info...');
+      const companyBySlug = new Map<string, CompanyInfo>();
+      const queue = [...uniqueSlugs];
+      const workers = Array.from({ length: DEFAULTS.detailConcurrency }, async () => {
+        while (queue.length > 0) {
+          const slug = queue.shift();
+          if (!slug) break;
+          try {
+            const info = await fetchCompanyInfo(slug, {
+              proxyUrl,
+              outputLanguage: input.outputLanguage,
+              linkedinHost: input.linkedinHost,
+            });
+            if (info) companyBySlug.set(slug, info);
+          } catch (e) {
+            log.debug(`company fetch failed for ${slug}: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+      });
+      await Promise.all(workers);
+      for (const [idx, slug] of slugByIndex) {
+        const info = companyBySlug.get(slug);
+        if (!info) continue;
+        const it = items[idx];
+        it.companyDescription = info.description;
+        it.companyWebsite = info.website;
+        it.companyEmployeeCount = info.employeeCount;
+        it.companyLogo = info.logo;
+        it.companyAddress = info.address;
+        if (info.name && !it.company) it.company = info.name;
+      }
+      log.info(`Company info added for ${companyBySlug.size} companies.`);
     }
 
     // ── Incremental classification ──────────────────────────────────────
