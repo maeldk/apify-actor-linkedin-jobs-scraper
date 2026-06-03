@@ -1,7 +1,18 @@
 import { DEFAULTS } from './constants.js';
 import type { Input, NormalizedInput } from './types.js';
+import { resolveQuery } from './inputAliases.js';
 
 import { normalizeDescriptionFormat } from './descriptionFormat.js';
+
+/** Resolve a single keyword string from canonical + alias fields (keywords/keyword/
+ *  query/searchString/…). `keywords` is this actor's own query field; no separate
+ *  `query` field, so the shared resolver has no local conflict. */
+function firstKeywordString(raw: unknown): string | undefined {
+  const v = resolveQuery(raw);
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return v.find((x): x is string => typeof x === 'string' && x.trim().length > 0);
+  return undefined;
+}
 export function cleanString(value: string | null | undefined): string | undefined {
   const cleaned = value?.replace(/\s+/g, ' ').trim();
   return cleaned || undefined;
@@ -36,9 +47,28 @@ export function normalizeLinkedinHost(value: string | null | undefined): string 
   return host;
 }
 
+/**
+ * Does this (normalised) input resolve to something scrapeable? Mirrors the runtime
+ * gate: a target needs keywords (incl. searchString/query/… aliases), geoIds, regions,
+ * regionPresets, location, or startUrls (LinkedIn job-search URLs). The remaining
+ * fields are filters that narrow a search and target nothing on their own. False ⇒ no
+ * actionable input → controlled no-op success, never a failure. Exported for the
+ * GATE 47 contract test.
+ */
+export function hasActionableTarget(n: Pick<NormalizedInput, 'keywords' | 'geoIds' | 'regions' | 'regionPresets' | 'location' | 'startUrls'>): boolean {
+  return n.keywords.trim().length > 0
+    || n.geoIds.length > 0
+    || n.regions.length > 0
+    || !!n.regionPresets
+    || !!n.location
+    || n.startUrls.length > 0;
+}
+
 export function normalizeInput(raw: Partial<Input>): NormalizedInput {
   return {
-    keywords: cleanString(raw.keywords) ?? '',
+    // Recover the keyword search term from canonical + alias fields so a pasted
+    // {searchString}/{query} still searches.
+    keywords: cleanString(firstKeywordString(raw)) ?? '',
     location: cleanString(raw.location),
     geoIds: cleanNumericList(raw.geoIds),
     regions: cleanUpperList(raw.regions),

@@ -19,7 +19,8 @@ import { sendAllNotifications, selectItemsToNotify, type NotificationConfig, typ
 import { logRunFooter } from './runFooter.js';
 import { emit, sanitizeInputForDiag, userSafeError, UserSafeError, type ErrCode } from './diag.js';
 import { GEOID_TO_ISO2, resolveRegions } from './regionResolver.js';
-import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost } from './inputNormalize.js';
+import { cleanString, cleanNumericList, normalizeInput, normalizeLinkedinHost, hasActionableTarget } from './inputNormalize.js';
+import { exitNoActionableInput } from './noActionableExit.js';
 
 import { applyDescriptionFormat, normalizeDescriptionFormat } from './descriptionFormat.js';
 import { maybeStripEmpty } from './emitFilter.js';
@@ -346,8 +347,18 @@ async function main() {
     });
     log.debug(`Auto-derived stateKey: ${input.stateKey}`);
   }
-  if (!input.keywords && !input.geoIds.length && !input.regions.length && !input.regionPresets && !input.location && !input.startUrls.length) {
-    await failWith(new Error('Provide at least one of: keywords, geoIds, regions, regionPresets, location, startUrls.'), 'LIN-1001', runStartTs, 0, 0, emitTerminal);
+  // No actionable target (empty input, or another actor's input shape with no
+  // keywords/geoIds/regions/regionPresets/location/startUrls) → controlled no-op
+  // SUCCESS, never Actor.fail(): a user mistake / blank-run spam must not dent the
+  // Store success-rate. emitTerminal is idempotent → benign info via plain emit, the
+  // SUCCESS run.complete via emitTerminal. The startUrls-URL validation + lock/runtime
+  // failures stay genuine.
+  if (!hasActionableTarget(input)) {
+    await exitNoActionableInput({
+      emit: (e) => emit(e),
+      beforeExit: () => emitTerminal({ type: 'run.complete', payload: { emitted: 0, unchangedSkipped: 0, totalReviews: 0, status: 'success', ok: true, durationMs: Date.now() - runStartTs, reason: 'no_actionable_input' } }),
+    });
+    return;
   }
   if (input.regions.length > 0 || input.regionPresets) {
     const expanded = expandGeoIds(input);
