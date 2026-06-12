@@ -10,6 +10,7 @@ export const DEFAULTS = {
   detailConcurrency: 3,
   interBatchDelayMs: 250,
   paginationHardCap: 1000,
+  incrementalScanCap: 600,
   defaultLinkedinHost: 'www',
   defaultOutputLanguage: 'en-US,en;q=0.9',
   pricePerResult: 0.00027,

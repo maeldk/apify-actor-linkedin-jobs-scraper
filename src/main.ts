@@ -11,6 +11,7 @@ import {
     buildTrackedHash, classifyJob, findExpiredJobs, buildUpdatedState,
     filterByEmissionPolicy, stateKvKey, detectRepostMatch,
 } from './incrementalState.js';
+import { computeIncrementalSerpCap } from './incrementalCoverage.js';
 import { lockKvKey, verifyLock, type StateLock } from './stateLock.js';
 import { openIncrementalState, defaultHandler, type OpenResult, type ApifyAdapter } from './openIncrementalState.js';
 import { isCanaryRun } from './canaryActorIds.js';
@@ -278,13 +279,22 @@ function isMeaningfulResult(item: OutputItem): boolean {
   return Boolean(item.linkedinJobId && (item.title || item.company || item.jobUrl || item.location));
 }
 
-async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: string | undefined): Promise<ApiJob[]> {
+async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: string | undefined): Promise<{ jobs: ApiJob[]; capped: boolean; failed: boolean }> {
   const seen = new Set<string>();
   const out: ApiJob[] = [];
   let start = 0;
   let consecutiveEmpty = 0;
+  let capped = false;
+  let failed = false;
   while (start < DEFAULTS.paginationHardCap) {
-    const result = await searchJobs(spec.params, start, { proxyUrl });
+    let result: Awaited<ReturnType<typeof searchJobs>>;
+    try {
+      result = await searchJobs(spec.params, start, { proxyUrl });
+    } catch (err) {
+      failed = true;
+      log.warning(`LinkedIn search page failed: ${err instanceof Error ? err.message : String(err)}`);
+      break;
+    }
     if (result.jobs.length === 0) {
       consecutiveEmpty++;
       if (consecutiveEmpty >= 2) break;
@@ -297,11 +307,14 @@ async function runQuery(spec: QuerySpec, maxResultsHint: number, proxyUrl: strin
       }
     }
     if (!result.hasNextPage) break;
-    if (maxResultsHint > 0 && out.length >= maxResultsHint * 1.5) break;
+    if (maxResultsHint > 0 && out.length >= maxResultsHint) {
+      capped = true;
+      break;
+    }
     start += DEFAULTS.pageSize;
   }
   log.info(`Fetched ${out.length} jobs for one search.`);
-  return out;
+  return { jobs: out, capped, failed };
 }
 
 async function main() {
@@ -450,11 +463,26 @@ async function main() {
       }
     }
 
+    const incrementalSerpCap = computeIncrementalSerpCap({
+      incrementalMode: input.incrementalMode,
+      maxResults: input.maxResults,
+      scanCap: DEFAULTS.incrementalScanCap,
+    });
+    const queryLimit = input.incrementalMode
+      ? incrementalSerpCap
+      : input.maxResults > 0
+        ? input.maxResults
+        : 0;
     const seenJobIds = new Set<string>();
     const allJobs: ApiJob[] = [];
     const countryHints = new Map<string, string | null>();
+    let failedSerpPages = 0;
+    let hitSerpCap = false;
     for (const q of queries) {
-      const jobs = await runQuery(q, input.maxResults, proxyUrl);
+      const result = await runQuery(q, queryLimit, proxyUrl);
+      if (result.failed) failedSerpPages++;
+      if (result.capped) hitSerpCap = true;
+      const { jobs } = result;
       for (const j of jobs) {
         if (seenJobIds.has(j.jobId)) continue;
         seenJobIds.add(j.jobId);
@@ -605,8 +633,13 @@ async function main() {
         };
         classifications.push(classifyJob(item.jobId, item.contentHash, buildTrackedHash(tracked), scrapedAt, priorState));
       }
-      const expired = findExpiredJobs(currentIds, scrapedAt, priorState);
-      classifications.push(...expired);
+      const coverageComplete = failedSerpPages === 0 && !hitSerpCap;
+      if (coverageComplete) {
+        const expired = findExpiredJobs(currentIds, scrapedAt, priorState);
+        classifications.push(...expired);
+      } else {
+        log.info('Expiry detection conservatively skipped for this run.');
+      }
 
       const toEmit = filterByEmissionPolicy(classifications, {
         outputMode: input.outputMode,
