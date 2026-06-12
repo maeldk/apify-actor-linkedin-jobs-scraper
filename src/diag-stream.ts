@@ -180,8 +180,29 @@ export function classifyDeadline(totalBudgetMs: number, idleMs: number): { wedge
   return { wedged: totalBudgetMs >= 5 * 60_000 && idleMs >= 90_000 };
 }
 
+/**
+ * Map a fired deadline guard to its terminal process disposition.
+ *
+ * A genuine wedge (a hung socket / stalled promise — our bug) exits non-zero so
+ * the Apify run is FAILED and surfaces in operator triage. A BENIGN timeout —
+ * the user simply gave the run too little time — exits 0 (SUCCESS). The run is
+ * not broken: the actor did honest work and stopped early at the user's own
+ * budget, exactly like the by-design `init.*` refusals (init.timeout_too_short
+ * et al.) that already exit clean. Reporting it as FAILED would let a careless
+ * (or hostile) user tank the actor's PUBLIC Store success-rate just by setting a
+ * 1-second timeout — so we don't. Exported for unit testing.
+ */
+export function deadlineDisposition(
+  wedged: boolean,
+): { exitCode: number; status: 'failed' | 'success'; ok: boolean } {
+  return wedged
+    ? { exitCode: 1, status: 'failed', ok: false }
+    : { exitCode: 0, status: 'success', ok: true };
+}
+
 function emitDeadlineExit(elapsedMs: number, totalBudgetMs: number, idleMs: number): void {
   const { wedged } = classifyDeadline(totalBudgetMs, idleMs);
+  const disp = deadlineDisposition(wedged);
   const budgetS = (totalBudgetMs / 1000).toFixed(0);
   const elapsedS = (elapsedMs / 1000).toFixed(0);
   const idleS = (idleMs / 1000).toFixed(0);
@@ -204,8 +225,8 @@ function emitDeadlineExit(elapsedMs: number, totalBudgetMs: number, idleMs: numb
         ? `Deadline guard fired — actor wedged: no log output for ${idleS}s, ${elapsedS}s into a ${budgetS}s run`
         : `Deadline guard fired — ${budgetS}s run timeout reached while still active (${elapsedS}s in, last output ${idleS}s ago)`,
       payload: {
-        status: 'failed',
-        ok: false,
+        status: disp.status,
+        ok: disp.ok,
         durationMs: elapsedMs,
         totalBudgetMs,
         idleMs,
@@ -269,7 +290,7 @@ function installDeadlineGuard(): void {
             + 'or reduce its scope (e.g. lower maxResults, narrow the query/location, or '
             + 'disable per-result detail enrichment).\n');
       } catch {}
-      setTimeout(() => process.exit(1), 200);
+      setTimeout(() => process.exit(deadlineDisposition(wedged).exitCode), 200);
     }, cappedMs) as unknown as { unref?: () => void };
     guard.unref?.();
   } catch {
