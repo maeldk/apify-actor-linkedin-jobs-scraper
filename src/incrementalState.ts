@@ -12,6 +12,27 @@
 
 import { createHash } from 'node:crypto';
 
+export type CoverageIncompleteReason =
+  | 'coverage_not_wired'
+  | 'max_results_cap'
+  | 'page_cap'
+  | 'failed_pages'
+  | 'fallback_degraded'
+  | 'pagination_metadata_missing'
+  | 'no_prior_state'
+  | 'state_corruption_detected';
+
+export interface CoverageProof {
+  complete: boolean;
+  reason?: CoverageIncompleteReason;
+}
+
+export const COMPLETE_COVERAGE: CoverageProof = { complete: true };
+
+export function buildIncompleteCoverage(reason: CoverageIncompleteReason): CoverageProof {
+  return { complete: false, reason };
+}
+
 // ── State entry for a single job ─────────────────────────────────────────
 
 export interface JobStateEntry {
@@ -48,9 +69,11 @@ export interface JobStateEntry {
 
 export interface IncrementalState {
   /** Schema version for forward compatibility */
-  version: 1;
+  version: 2;
   /** The stateKey this state belongs to */
   stateKey: string;
+  /** Assertion only. The KV key is the source of truth for scoping. */
+  queryFingerprint: string;
   /** ISO-8601 timestamp of last state write */
   updatedAt: string;
   /** Map of jobId → state entry */
@@ -184,7 +207,9 @@ export function findExpiredJobs(
   currentJobIds: Set<string>,
   now: string,
   priorState: IncrementalState | null,
+  coverage: CoverageProof = COMPLETE_COVERAGE,
 ): ClassifiedRecord[] {
+  if (!coverage.complete) return [];
   if (!priorState) return [];
 
   const expired: ClassifiedRecord[] = [];
@@ -262,9 +287,11 @@ export function pruneExpiredEntries(
 
 export function buildUpdatedState(
   stateKey: string,
+  queryFingerprint: string,
   now: string,
   priorState: IncrementalState | null,
   classifications: ClassifiedRecord[],
+  coverage: CoverageProof = COMPLETE_COVERAGE,
   snapshots?: Map<string, NonNullable<JobStateEntry['snapshot']>>,
 ): IncrementalState {
   const jobs: Record<string, JobStateEntry> = {};
@@ -276,6 +303,7 @@ export function buildUpdatedState(
   }
 
   for (const c of classifications) {
+    if (c.changeType === 'EXPIRED' && !coverage.complete) continue;
     if (c.changeType === 'EXPIRED') {
       const existing = jobs[c.jobId];
       if (existing) {
@@ -299,7 +327,7 @@ export function buildUpdatedState(
 
   pruneExpiredEntries(jobs, now);
 
-  return { version: 1, stateKey, updatedAt: now, jobs };
+  return { version: 2, stateKey, queryFingerprint, updatedAt: now, jobs };
 }
 
 // ── Emission policy ──────────────────────────────────────────────────────
@@ -331,10 +359,109 @@ export function filterByEmissionPolicy(
 
 // ── KV store key helpers ─────────────────────────────────────────────────
 
-export function stateKvKey(stateKey: string): string {
+export function stateKvKey(stateKey: string, queryFingerprint: string): string {
+  return `state__${Buffer.from(stateKey, 'utf8').toString('base64url')}__${queryFingerprint}`;
+}
+
+export function legacyStateKvKey(stateKey: string): string {
   return `state_${stateKey}`;
 }
 
-export function createEmptyState(stateKey: string, now: string): IncrementalState {
-  return { version: 1, stateKey, updatedAt: now, jobs: {} };
+export function legacySlashStateKvKey(stateKey: string): string {
+  return `state/${stateKey}`;
+}
+
+export function createEmptyState(stateKey: string, queryFingerprint: string, now: string): IncrementalState {
+  return { version: 2, stateKey, queryFingerprint, updatedAt: now, jobs: {} };
+}
+
+export interface KeyValueStoreLike {
+  getValue<T = unknown>(key: string): Promise<T | null>;
+  setValue<T = unknown>(key: string, value: T | null): Promise<void>;
+}
+
+export interface LoadStateWithMigrationResult {
+  key: string;
+  state: IncrementalState | null;
+  coverage: CoverageProof;
+  migrated: boolean;
+  migratedFromKey: string | null;
+}
+
+export async function loadStateWithMigration(
+  store: KeyValueStoreLike,
+  stateKey: string,
+  queryFingerprint: string,
+): Promise<LoadStateWithMigrationResult> {
+  const key = stateKvKey(stateKey, queryFingerprint);
+  const scoped = await safeGetValue(store, key);
+
+  if (scoped !== null) {
+    if (!isIncrementalState(scoped) || scoped.queryFingerprint !== queryFingerprint) {
+      return {
+        key,
+        state: null,
+        coverage: buildIncompleteCoverage('state_corruption_detected'),
+        migrated: false,
+        migratedFromKey: null,
+      };
+    }
+
+    return { key, state: scoped, coverage: COMPLETE_COVERAGE, migrated: false, migratedFromKey: null };
+  }
+
+  for (const legacyKey of [legacyStateKvKey(stateKey), legacySlashStateKvKey(stateKey)]) {
+    const legacy = await safeGetValue(store, legacyKey);
+    if (!isLegacyIncrementalState(legacy)) continue;
+    return {
+      key,
+      state: null,
+      coverage: buildIncompleteCoverage('no_prior_state'),
+      migrated: true,
+      migratedFromKey: legacyKey,
+    };
+  }
+
+  return {
+    key,
+    state: null,
+    coverage: buildIncompleteCoverage('no_prior_state'),
+    migrated: false,
+    migratedFromKey: null,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isIncrementalState(value: unknown): value is IncrementalState {
+  return isRecord(value)
+    && value.version === 2
+    && typeof value.stateKey === 'string'
+    && typeof value.queryFingerprint === 'string'
+    && isRecord(value.jobs);
+}
+
+function isLegacyIncrementalState(value: unknown): value is Omit<IncrementalState, 'version' | 'queryFingerprint'> & { version?: 1 } {
+  return isRecord(value)
+    && (value.version === undefined || value.version === 1)
+    && typeof value.stateKey === 'string'
+    && isRecord(value.jobs);
+}
+
+async function safeGetValue(store: KeyValueStoreLike, key: string): Promise<unknown | null> {
+  try {
+    return await store.getValue<unknown>(key);
+  } catch (err) {
+    const statusCode = typeof err === 'object' && err !== null && 'statusCode' in err
+      ? (err as { statusCode?: unknown }).statusCode
+      : null;
+    if (statusCode === 404) return null;
+    const name = typeof err === 'object' && err !== null && 'name' in err
+      ? (err as { name?: unknown }).name
+      : null;
+    if (name === 'ArgumentError') return null;
+    throw err;
+  }
 }

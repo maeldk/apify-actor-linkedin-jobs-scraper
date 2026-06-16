@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULTS, COMPACT_FIELDS, SOURCE_NAME, REGION_PRESETS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from '../src/constants.js';
 import { transformJob, buildContentHash, applyDescriptionMaxLength, mergeDetail, inferCountryHintFromSearchLocation } from '../src/transform.js';
 import type { ApiJob } from '../src/apiClient.js';
-import { classifyJob, detectRepostMatch, buildUpdatedState, findExpiredJobs, filterByEmissionPolicy } from '../src/incrementalState.js';
+import { buildIncompleteCoverage, classifyJob, detectRepostMatch, buildUpdatedState, findExpiredJobs, filterByEmissionPolicy } from '../src/incrementalState.js';
 import type { IncrementalState, ClassifiedRecord, JobStateEntry } from '../src/incrementalState.js';
 import { selectItemsToNotify } from '../src/notifications.js';
 import type { OutputItem } from '../src/types.js';
@@ -236,7 +236,7 @@ describe('incrementalState - classifyJob', () => {
   const CONTENT_HASH = 'contenthash1';
 
   const makeState = (overrides: Partial<{ active: boolean; trackedHash: string }>): IncrementalState => ({
-    version: 1, stateKey: 'k', updatedAt: NOW,
+    version: 2, stateKey: 'k', queryFingerprint: 'fp', updatedAt: NOW,
     jobs: { 'job-1': {
       jobId: 'job-1', contentHash: CONTENT_HASH,
       trackedHash: overrides.trackedHash ?? HASH,
@@ -268,7 +268,7 @@ describe('incrementalState - detectRepostMatch', () => {
   const CONTENT_HASH = 'contenthash1';
 
   const makeState = (active: boolean): IncrementalState => ({
-    version: 1, stateKey: 'k', updatedAt: NOW,
+    version: 2, stateKey: 'k', queryFingerprint: 'fp', updatedAt: NOW,
     jobs: { 'job-1': {
       jobId: 'job-1', contentHash: CONTENT_HASH, trackedHash: 'h',
       firstSeenAt: NOW, lastSeenAt: NOW, active,
@@ -300,7 +300,7 @@ describe('incrementalState - snapshot lifecycle', () => {
     ];
     const snaps = new Map<string, NonNullable<JobStateEntry['snapshot']>>();
     snaps.set('j1', { linkedinJobId: '4391', title: 'Engineer', company: 'Acme', location: 'NYC', jobUrl: 'https://example/1', postedAt: T1 });
-    const state = buildUpdatedState('k', T1, null, classifications, snaps);
+    const state = buildUpdatedState('k', 'fp', T1, null, classifications, undefined, snaps);
     expect(state.jobs.j1.snapshot?.title).toBe('Engineer');
     expect(state.jobs.j1.snapshot?.company).toBe('Acme');
     expect(state.jobs.j1.snapshot?.linkedinJobId).toBe('4391');
@@ -313,7 +313,7 @@ describe('incrementalState - snapshot lifecycle', () => {
     ];
     const snaps = new Map<string, NonNullable<JobStateEntry['snapshot']>>();
     snaps.set('j1', { linkedinJobId: '4391', title: 'Engineer', company: 'Acme', location: 'NYC', jobUrl: null, postedAt: T1 });
-    const state1 = buildUpdatedState('k', T1, null, initial, snaps);
+    const state1 = buildUpdatedState('k', 'fp', T1, null, initial, undefined, snaps);
     expect(state1.jobs.j1.active).toBe(true);
 
     // T2: j1 disappears → findExpiredJobs marks it EXPIRED
@@ -322,7 +322,7 @@ describe('incrementalState - snapshot lifecycle', () => {
     expect(expired[0].changeType).toBe('EXPIRED');
 
     // buildUpdatedState should preserve snapshot on existing jobs even when no new classifications carry it
-    const state2 = buildUpdatedState('k', T2, state1, expired);
+    const state2 = buildUpdatedState('k', 'fp', T2, state1, expired);
     expect(state2.jobs.j1.active).toBe(false);
     expect(state2.jobs.j1.snapshot?.title).toBe('Engineer');  // ← key check
     expect(state2.jobs.j1.snapshot?.company).toBe('Acme');
@@ -334,7 +334,7 @@ describe('incrementalState - snapshot lifecycle', () => {
     ];
     const snaps1 = new Map<string, NonNullable<JobStateEntry['snapshot']>>();
     snaps1.set('j1', { title: 'Old Title', company: 'Acme', location: null, jobUrl: null, postedAt: T1, linkedinJobId: 'x' });
-    const state1 = buildUpdatedState('k', T1, null, classifications, snaps1);
+    const state1 = buildUpdatedState('k', 'fp', T1, null, classifications, undefined, snaps1);
 
     // Job goes EXPIRED then REAPPEARED with updated title
     const reappear: ClassifiedRecord[] = [
@@ -342,9 +342,24 @@ describe('incrementalState - snapshot lifecycle', () => {
     ];
     const snaps2 = new Map<string, NonNullable<JobStateEntry['snapshot']>>();
     snaps2.set('j1', { title: 'New Title', company: 'Acme', location: null, jobUrl: null, postedAt: T2, linkedinJobId: 'x' });
-    const state2 = buildUpdatedState('k', T2, state1, reappear, snaps2);
+    const state2 = buildUpdatedState('k', 'fp', T2, state1, reappear, undefined, snaps2);
     expect(state2.jobs.j1.snapshot?.title).toBe('New Title');
     expect(state2.jobs.j1.active).toBe(true);
+  });
+
+  it('suppresses EXPIRED when coverage is incomplete', () => {
+    const initial: ClassifiedRecord[] = [
+      { jobId: 'j1', changeType: 'NEW', contentHash: 'h1', trackedHash: 't1', firstSeenAt: T1, lastSeenAt: T1, previousSeenAt: null, expiredAt: null },
+    ];
+    const state1 = buildUpdatedState('k', 'fp', T1, null, initial);
+    const coverage = buildIncompleteCoverage('failed_pages');
+    const expired = findExpiredJobs(new Set(), T2, state1, coverage);
+    const state2 = buildUpdatedState('k', 'fp', T2, state1, [
+      { jobId: 'j1', changeType: 'EXPIRED', contentHash: 'h1', trackedHash: 't1', firstSeenAt: T1, lastSeenAt: T1, previousSeenAt: T1, expiredAt: T2 },
+    ], coverage);
+    expect(expired).toHaveLength(0);
+    expect(state2.jobs.j1.active).toBe(true);
+    expect(state2.jobs.j1.expiredAt).toBeNull();
   });
 });
 

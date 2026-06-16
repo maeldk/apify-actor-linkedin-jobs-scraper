@@ -10,8 +10,11 @@ import {
     type IncrementalState, type ClassifiedRecord, type TrackedFields,
     buildTrackedHash, classifyJob, findExpiredJobs, buildUpdatedState,
     filterByEmissionPolicy, stateKvKey, detectRepostMatch,
+    loadStateWithMigration, COMPLETE_COVERAGE, type CoverageProof,
 } from './incrementalState.js';
 import { computeIncrementalSerpCap } from './incrementalCoverage.js';
+import { buildQueryFingerprint } from './buildQueryFingerprint.js';
+import { buildCoverageProofFromSerp } from './SerpResult.js';
 import { lockKvKey, verifyLock, type StateLock } from './stateLock.js';
 import { openIncrementalState, defaultHandler, type OpenResult, type ApifyAdapter } from './openIncrementalState.js';
 import { isCanaryRun } from './canaryActorIds.js';
@@ -436,13 +439,43 @@ async function main() {
   //                     fallback degrades to non-incremental; otherwise
   //                     Actor.fail with INCREMENTAL_UNAVAILABLE.
   let priorState: IncrementalState | null = null;
+  let priorCoverage: CoverageProof = COMPLETE_COVERAGE;
+  let stateKvRecordKey: string | null = null;
+  let queryFingerprint: string | null = null;
   let stateKv: Awaited<ReturnType<typeof Actor.openKeyValueStore>> | null = null;
   let helperReleaseLock: (() => Promise<void>) | null = null;
 
   if (input.incrementalMode && input.stateKey) {
+    queryFingerprint = buildQueryFingerprint(input as unknown as Record<string, unknown>, [
+      'keywords',
+      'location',
+      'geoIds',
+      'regions',
+      'regionPresets',
+      'datePosted',
+      'jobType',
+      'experienceLevel',
+      'workType',
+      'salaryMin',
+      'salaryMax',
+      'salaryIncludeUnknown',
+      'companies',
+      'excludeCompanies',
+      'excludeKeywords',
+      'easyApply',
+      'removeAgency',
+      'distance',
+      'sortBy',
+      'linkedinHost',
+      'outputLanguage',
+      'discoverRelated',
+      'relatedSeedCount',
+      'enrichDetails',
+      'startUrls',
+    ]);
     const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
     const openResult: OpenResult = await openIncrementalState(
-      { storeName: STATE_STORE, stateKey: input.stateKey, runId },
+      { storeName: STATE_STORE, stateKey: `${input.stateKey}__${queryFingerprint.slice(0, 16)}`, runId },
       { open: (name) => Actor.openKeyValueStore(name) },
     );
 
@@ -473,10 +506,12 @@ async function main() {
     } else if (openResult.kind === 'opened') {
       stateKv = openResult.store as Awaited<ReturnType<typeof Actor.openKeyValueStore>>;
       helperReleaseLock = openResult.releaseLock;
-      const raw = await stateKv.getValue<IncrementalState>(stateKvKey(input.stateKey));
-      if (raw && raw.version === 1 && raw.stateKey === input.stateKey) {
-        priorState = raw;
-        const activeCount = Object.values(raw.jobs).filter(j => j.active).length;
+      const loaded = await loadStateWithMigration(stateKv, input.stateKey, queryFingerprint);
+      stateKvRecordKey = loaded.key;
+      priorState = loaded.state;
+      priorCoverage = loaded.coverage;
+      if (priorState) {
+        const activeCount = Object.values(priorState.jobs).filter(j => j.active).length;
         log.info(`Loaded prior state: ${activeCount} active jobs`);
       }
     }
@@ -684,12 +719,18 @@ async function main() {
         };
         classifications.push(classifyJob(item.jobId, item.contentHash, buildTrackedHash(tracked), scrapedAt, priorState));
       }
-      const coverageComplete = failedSerpPages === 0 && !hitSerpCap;
-      if (coverageComplete) {
-        const expired = findExpiredJobs(currentIds, scrapedAt, priorState);
+      const coverage = buildCoverageProofFromSerp(priorCoverage, {
+        hitMaxResultsCap: hitSerpCap,
+        hitPageCap: false,
+        failedPages: failedSerpPages,
+        fallbackDegraded: false,
+        paginationMetaOk: true,
+      });
+      if (coverage.complete) {
+        const expired = findExpiredJobs(currentIds, scrapedAt, priorState, coverage);
         classifications.push(...expired);
       } else {
-        log.info('Expiry detection conservatively skipped for this run.');
+        log.info('Expiry detection conservatively skipped for this run.', { reason: coverage.reason });
       }
 
       const toEmit = filterByEmissionPolicy(classifications, {
@@ -753,13 +794,16 @@ async function main() {
       }
       await dispatchNotifications(input, toPush as unknown as OutputItem[], scrapedAt);
 
-      const lockKey = lockKvKey(input.stateKey);
+      const lockKey = lockKvKey(`${input.stateKey}__${queryFingerprint?.slice(0, 16) ?? ''}`);
       const runId = process.env.APIFY_ACTOR_RUN_ID ?? 'local';
       const currentLock = await stateKv.getValue<StateLock>(lockKey);
       if (!verifyLock(currentLock, runId)) {
         await failWith(new Error('state lock lost during run'), 'LIN-4001', runStartTs, emittedCount ?? 0, unchangedSkipped ?? 0, emitTerminal);
       }
-      await stateKv.setValue(stateKvKey(input.stateKey), buildUpdatedState(input.stateKey, scrapedAt, priorState, classifications, snapshots));
+      await stateKv.setValue(
+        stateKvRecordKey ?? stateKvKey(input.stateKey, queryFingerprint ?? 'missing-query-fingerprint'),
+        buildUpdatedState(input.stateKey, queryFingerprint ?? 'missing-query-fingerprint', scrapedAt, priorState, classifications, coverage, snapshots),
+      );
 
       unchangedSkipped = classifications.filter((c) => c.changeType === 'UNCHANGED').length;
       log.info('Incremental complete', { emitted: toPush.length, unchangedSkipped });

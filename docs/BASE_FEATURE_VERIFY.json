@@ -2,7 +2,7 @@
   "tool": "base-feature-verify",
   "version": "1.0",
   "actor": "blackfalcondata~linkedin-job-scraper",
-  "timestamp": "2026-06-16T03:18:56.570Z",
+  "timestamp": "2026-06-16T04:12:49.371Z",
   "pass": true,
   "probeFilter": "all",
   "probes": [
@@ -31,7 +31,7 @@
       "probe": "incr_verify",
       "pass": true,
       "skipped": false,
-      "detail": "5 items (5 new=data churn, seed items filtered ✓)",
+      "detail": "3 items (3 new=data churn, seed items filtered ✓)",
       "warnings": []
     },
     {
