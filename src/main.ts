@@ -26,6 +26,19 @@ import { exitNoActionableInput } from './noActionableExit.js';
 import { applyDescriptionFormat, normalizeDescriptionFormat } from './descriptionFormat.js';
 import { maybeStripEmpty } from './emitFilter.js';
 import { classifyFallbackErrCode, type ErrCodeMap } from './errCodeClassifier.js';
+import {
+  createSchemaWatcher,
+  type ObservedBaseline,
+  type SchemaWatcher,
+} from './schemaDrift.js';
+import {
+  DRIFT_ACK,
+  DRIFT_MAPPED,
+  observeApiJob,
+  observeCompanyInfo,
+  observeDetail,
+  type SourceObserver,
+} from './schemaDriftConfig.js';
 const FALLBACK_ERR_CODES: ErrCodeMap = {
   rateLimit: '2030',
   authBlock: '2030',
@@ -43,6 +56,34 @@ let activeRunStartTs = Date.now();
 let activeClearHeartbeat: (() => void) | null = null;
 let activeReleaseLock: (() => Promise<void>) | null = null;
 let activeEmitTerminal: typeof emit = emit;
+const SCHEMA_BASELINE_KEY = 'schema-baseline';
+let activeSchemaWatcher: SchemaWatcher | null = null;
+
+async function initSchemaWatcher(): Promise<SchemaWatcher> {
+  let observedBaseline: ObservedBaseline | null = null;
+  try {
+    const kv = await Actor.openKeyValueStore();
+    observedBaseline = await kv.getValue<ObservedBaseline>(SCHEMA_BASELINE_KEY);
+  } catch {
+    observedBaseline = null;
+  }
+  return createSchemaWatcher({
+    actor: 'linkedin-jobs-scraper',
+    mappedKnown: DRIFT_MAPPED,
+    acknowledgedIgnored: DRIFT_ACK,
+    observedBaseline,
+  });
+}
+
+async function flushSchemaDrift(watcher: SchemaWatcher | null): Promise<void> {
+  if (!watcher) return;
+  try {
+    const kv = await Actor.openKeyValueStore();
+    await kv.setValue(SCHEMA_BASELINE_KEY, watcher.report().observedBaseline);
+  } catch {
+    // Observability must never affect the run.
+  }
+}
 
 async function failWith(
   internalCause: unknown,
@@ -335,6 +376,7 @@ async function main() {
     if (terminalEmitted) return;
     terminalEmitted = true;
     await emit(event);
+    await flushSchemaDrift(activeSchemaWatcher);
   };
   activeEmitTerminal = emitTerminal;
 
@@ -373,6 +415,9 @@ async function main() {
     });
     return;
   }
+  activeSchemaWatcher = await initSchemaWatcher();
+  const observeRaw: SourceObserver = (layer, record) => activeSchemaWatcher?.observe(layer, record);
+
   if (input.regions.length > 0 || input.regionPresets) {
     const expanded = expandGeoIds(input);
     if (expanded.unresolved.length > 0) {
@@ -483,6 +528,7 @@ async function main() {
       if (result.failed) failedSerpPages++;
       if (result.capped) hitSerpCap = true;
       const { jobs } = result;
+      observeApiJob(jobs, observeRaw);
       for (const j of jobs) {
         if (seenJobIds.has(j.jobId)) continue;
         seenJobIds.add(j.jobId);
@@ -509,6 +555,7 @@ async function main() {
               outputLanguage: input.outputLanguage,
               linkedinHost: input.linkedinHost,
             });
+            observeApiJob(related, observeRaw);
             for (const r of related) {
               if (seenJobIds.has(r.jobId)) continue;
               seenJobIds.add(r.jobId);
@@ -556,6 +603,7 @@ async function main() {
             });
             if (html) {
               const detail = parseDetail(html);
+              observeDetail(detail, observeRaw);
               items[idx] = mergeDetail(item, detail, input.phoneExtractionMode);
               enriched++;
             } else {
@@ -592,7 +640,10 @@ async function main() {
               outputLanguage: input.outputLanguage,
               linkedinHost: input.linkedinHost,
             });
-            if (info) companyBySlug.set(slug, info);
+            if (info) {
+              observeCompanyInfo(info, observeRaw);
+              companyBySlug.set(slug, info);
+            }
           } catch (e) {
             log.debug(`company fetch failed for ${slug}: ${e instanceof Error ? e.message : e}`);
           }

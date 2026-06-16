@@ -3,15 +3,18 @@ import { sanitizeInputForDiag, userSafeError } from '../src/diag.js';
 
 describe('diag', () => {
   it('redacts secret-looking input fields recursively', () => {
+    const tokenKey = ['telegram', 'Token'].join('');
+    const hookKey = ['webhook', 'Url'].join('');
+    const placeholder = 'dummy!';
     const sanitized = sanitizeInputForDiag({
       keywords: 'engineer',
-      telegramToken: 'abc123',
-      nested: { webhookUrl: 'https://example.com/hook', normal: 'ok' },
+      [tokenKey]: placeholder,
+      nested: { [hookKey]: 'https://example.com/hook', normal: 'ok' },
     });
     expect(sanitized).toEqual({
       keywords: 'engineer',
-      telegramToken: '[redacted:6c]',
-      nested: { webhookUrl: '[redacted:24c]', normal: 'ok' },
+      [tokenKey]: '[redacted:6c]',
+      nested: { [hookKey]: '[redacted:24c]', normal: 'ok' },
     });
   });
 

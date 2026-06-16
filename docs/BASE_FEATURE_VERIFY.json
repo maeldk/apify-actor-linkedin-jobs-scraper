@@ -1,0 +1,66 @@
+{
+  "tool": "base-feature-verify",
+  "version": "1.0",
+  "actor": "blackfalcondata~linkedin-job-scraper",
+  "timestamp": "2026-06-16T03:18:56.570Z",
+  "pass": true,
+  "probeFilter": "all",
+  "probes": [
+    {
+      "probe": "basic",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items, no dupes, scrapedAt ✓, portalUrl ✓, maxResults ✓ (5/5)",
+      "warnings": []
+    },
+    {
+      "probe": "compact",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items, 28 fields, no heavy fields",
+      "warnings": []
+    },
+    {
+      "probe": "incr_seed",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items, all changeType:new",
+      "warnings": []
+    },
+    {
+      "probe": "incr_verify",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items (5 new=data churn, seed items filtered ✓)",
+      "warnings": []
+    },
+    {
+      "probe": "desc_max",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items, all descriptions ≤ 55 chars",
+      "warnings": []
+    },
+    {
+      "probe": "detail_enrich",
+      "pass": true,
+      "skipped": false,
+      "detail": "3/3 items have detail fields (description, descriptionHtml)",
+      "warnings": []
+    },
+    {
+      "probe": "repost_fields",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items, repost fields present, 0 repost(s) detected",
+      "warnings": []
+    },
+    {
+      "probe": "url_mode",
+      "pass": true,
+      "skipped": false,
+      "detail": "5 items from URL input, all IDs valid, scrapedAt ✓",
+      "warnings": []
+    }
+  ]
+}
