@@ -42,6 +42,7 @@ import {
   observeDetail,
   type SourceObserver,
 } from './schemaDriftConfig.js';
+import { shouldFailAllSearchTargets } from './failureIsolation.js';
 const FALLBACK_ERR_CODES: ErrCodeMap = {
   rateLimit: '2030',
   authBlock: '2030',
@@ -573,6 +574,14 @@ async function main() {
     }
 
     log.info(`Fetched ${allJobs.length} unique jobs.`);
+
+    if (shouldFailAllSearchTargets({
+      targetCount: queries.length,
+      failedTargets: failedSerpPages,
+      collectedCount: allJobs.length,
+    })) {
+      await failWith(new Error('all LinkedIn search targets failed'), 'LIN-2010', runStartTs, emittedCount, unchangedSkipped, emitTerminal);
+    }
 
     // ── Optional result expansion ───────────────────────────────────────
     if (input.discoverRelated && allJobs.length > 0 && input.relatedSeedCount > 0) {
