@@ -1,12 +1,11 @@
 version: 1
-
 audience: recruiter_data
-families: [jobs]
+families:
+  - jobs
 domains:
   primary: linkedin.com
   region: Global
 markets: 1
-
 keyFeatures:
   - incremental
   - notifications
@@ -71,13 +70,9 @@ keyFeatures:
       `excludeCompanies` to drop staffing brands. Combine with
       `excludeKeywords` to scrub spam-prone titles.
   - compact
-
-# Trimmed to fit cap. Removed: change-classification (overlaps with
-# incremental), contact-extraction (LinkedIn restricts contact info),
-# salary-data (LinkedIn guest HTML does not expose structured salary),
-# structured-export (universally true). Maintainer ordering preserved.
+  - mcp-export
 disable_auto_detect:
-  - change-classification    # overlap with incremental
-  - contact-extraction        # LinkedIn hides contact info — low signal
-  - salary-data               # not exposed in LinkedIn guest HTML
-  - structured-export         # universally true — every Apify actor exports JSON/CSV/Excel
+  - change-classification
+  - contact-extraction
+  - salary-data
+  - structured-export

@@ -82,6 +82,10 @@ export interface Input {
   excludeEmptyFields?: boolean;
   phoneExtractionMode?: 'strict' | 'lenient';
   maxResults?: number;
+  /** Opt-in MCP connector id (Notion/Slack/Sheets/Linear export). Empty → no-op. */
+  appConnector?: string;
+  /** Issue-tracker team (name or id) when the connected app requires one. */
+  mcpIssueTeam?: string;
 }
 
 export interface NormalizedInput {

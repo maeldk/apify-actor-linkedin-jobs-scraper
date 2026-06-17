@@ -14,6 +14,7 @@
         "deploy": "node C:/Dev/Apify/_tools/pre-push-check.mjs . && apify push"
     },
     "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.29.0",
         "apify": "^3.2.0",
         "crawlee": "^3.11.0",
         "undici": "^8.1.0"

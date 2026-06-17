@@ -43,7 +43,7 @@ Key parameters:
 - **`salaryMin`** — Minimum annual salary (USD). Mapped to LinkedIn's nearest f_SB2 bucket. Post-filtered exactly.
 - **`salaryMax`** — Maximum annual salary. Post-filtered (LinkedIn has no native max filter).
 - **`salaryIncludeUnknown`** — When salaryMin/Max set, include jobs with no salary data. (default: `true`)
-- ...and 38 more parameters
+- ...and 40 more parameters
 
 ## Input examples
 
@@ -189,7 +189,7 @@ Each run produces a dataset of structured job records. Results can be downloaded
 
 ## Incremental fields
 
-When `incremental: true`, each record also carries:
+When incremental mode is on, each record also carries:
 
 - `changeType` — one of `NEW`, `UPDATED`, `UNCHANGED`, `REAPPEARED`, `EXPIRED`. Default output covers `NEW` / `UPDATED` / `REAPPEARED`; set `emitUnchanged: true` or `emitExpired: true` to opt into the others.
 - `firstSeenAt`, `lastSeenAt` — ISO-8601 timestamps tracking the listing across runs.
@@ -225,8 +225,8 @@ Example costs:
 
 - 10 results: **$0.0032**
 - 25 results: **$0.00725**
-- 100 results: **$0.03**
-- 200 results: **$0.05**
+- 100 results: **$0.028**
+- 200 results: **$0.054**
 - 500 results: **$0.14**
 
 ### Example: recurring monitoring savings
@@ -243,7 +243,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $2.04. First month with incremental costs $0.18 / $0.38 / $0.67 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-05-30T19:09:43.197Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-06-17T19:18:48.975Z","version":1} -->
 
 ## FAQ
 
@@ -265,7 +265,7 @@ Yes. You can start runs, manage inputs, and retrieve results programmatically th
 
 ### Can I use LinkedIn Job Scraper through an MCP Server?
 
-Yes. Apify provides an [MCP Server](https://apify.com/apify/actors-mcp-server?fpr=1h3gvi) that lets AI assistants and agents call this actor directly. Use compact mode and `descriptionMaxLength` to keep payloads manageable for LLM context windows.
+Yes. Apify provides an [MCP Server](https://apify.com/apify/actors-mcp-server?fpr=1h3gvi) that lets AI assistants and agents call this actor directly. Use compact mode, `descriptionMaxLength`, a single `descriptionFormat`, and `excludeEmptyFields` to keep payloads manageable for LLM context windows.
 
 ### Is it legal to scrape linkedin.com?
 
@@ -278,13 +278,13 @@ If you have questions, need a feature, or found a bug, please [open an issue](ht
 ## You might also like
 
 - [Actiris Brussels Job Scraper](https://apify.com/blackfalcondata/actiris-scraper?fpr=1h3gvi) — Scrape all active job listings from actiris.brussels — official Brussels public employment service..
-- [Adzuna Job Scraper — Global Jobs with Salary & Coordinates](https://apify.com/blackfalcondata/adzuna-scraper?fpr=1h3gvi) — Scrape adzuna.com job listings across 19 country markets with structured salary data.
+- [AMS Austria Job Scraper — Austrian Public Employment Service](https://apify.com/blackfalcondata/ams-austria-job-scraper?fpr=1h3gvi) — Scrape jobs.ams.at — Austria's official AMS public employment portal, branded "alle jobs" ("all.
 - [APEC.fr Scraper - French Executive Jobs](https://apify.com/blackfalcondata/apec-scraper?fpr=1h3gvi) — Scrape apec.fr - French executive job listings with salary ranges, company, location, skills,.
-- [Arbeitsagentur Jobs Feed — German Federal Employment Agency](https://apify.com/blackfalcondata/arbeitsagentur-jobs-feed?fpr=1h3gvi) — Extract job listings from arbeitsagentur.de — Germany's official public employment portal with 1M+.
-- [Arbeitsagentur Scraper - German Jobs](https://apify.com/blackfalcondata/arbeitsagentur-scraper?fpr=1h3gvi) — Scrape arbeitsagentur.de - Germany’s official employment portal with 1M+ listings. Contact data,.
+- [Arbeitsagentur Jobs Feed — German Federal Employment Agency](https://apify.com/blackfalcondata/arbeitsagentur-jobs-feed?fpr=1h3gvi) — Scrape arbeitsagentur.de — Germany's official public employment portal with over 1 million live job.
 - [Arbetsformedlingen Job Scraper](https://apify.com/blackfalcondata/arbetsformedlingen-scraper?fpr=1h3gvi) — Scrape arbetsformedlingen.se (Platsbanken) — Sweden's official employment portal. Returns 84.
-- [AutoScout24 Scraper — European Car Listings with Dealer Data](https://apify.com/blackfalcondata/autoscout24-scraper?fpr=1h3gvi) — Scrape autoscout24.com - Europe's largest used car marketplace with 770K+ listings. Structured.
-- [Bayt.com Scraper — MENA Jobs with Salary & Skills Filter](https://apify.com/blackfalcondata/bayt-scraper?fpr=1h3gvi) — Scrape bayt.com — leading Middle East job board covering UAE, Saudi Arabia, Qatar, Egypt and 9 more.
+- [Bayt.com Scraper — MENA Jobs with Salary & Skills Filter](https://apify.com/blackfalcondata/bayt-scraper?fpr=1h3gvi) — Scrape bayt.com — the leading Middle East job board spanning UAE, Saudi Arabia, Qatar, Egypt.
+- [Bumeran Scraper — LATAM Jobs across 7 Countries & 8 Brands](https://apify.com/blackfalcondata/bumeran-scraper?fpr=1h3gvi) — Scrape Bumeran Group's job boards across LATAM — Argentina (bumeran.com.ar + zonajobs), Chile.
+- [Cadremploi Scraper — French Executive & Management Jobs](https://apify.com/blackfalcondata/cadremploi-scraper?fpr=1h3gvi) — Scrape cadremploi.fr — France's leading job board for executives and managers (cadres). Salary.
 
 ## Getting started with Apify
 

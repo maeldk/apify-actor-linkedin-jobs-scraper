@@ -1,6 +1,6 @@
 {
     "title": "LinkedIn Jobs Scraper",
-    "description": "Scrape LinkedIn job postings via the public guest API. Set 🔍 Keywords + 📍 Location to start — LinkedIn resolves the location for you, no IDs needed. Turn on 🏢 Scrape company details / 🔬 Detail enrichment for employer data, full descriptions and salary.\n\nTip: paste a LinkedIn jobs search URL into 🔗 Start URLs to reuse all of its filters. Set 💯 Max Results to control volume (0 = unlimited). Incremental mode optionally skips already-seen jobs on recurring runs.",
+    "description": "Scrape LinkedIn job postings via the public guest API. Set 🔍 Keywords + 📍 Location to start — LinkedIn resolves the location for you, no IDs needed. Turn on 🏢 Scrape company details / 🔬 Detail enrichment for employer data, full descriptions and salary.\n\nTip: paste a LinkedIn jobs search URL into 🔗 Start URLs to reuse all of its filters. Set 💯 Max Results to control volume (0 = unlimited). Incremental mode optionally skips already-seen jobs on recurring runs.\n\nTo start, provide 🔗 Start URLs to scrape specific pages. Set 💯 Max Results to control volume (0 = unlimited).",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
@@ -436,6 +436,24 @@
             "description": "Drop null, empty-string, and empty-array fields from each record before push. Smaller payloads for AI agents and dashboards.",
             "default": false,
             "prefill": false
+        },
+        "appConnector": {
+            "title": "Send results to Notion (or another connected app)",
+            "type": "string",
+            "description": "Optional. Pick a connected app under Settings → API & Integrations to receive your results. Notion is supported today (a run-summary page); other MCP connectors are best-effort as Apify expands its catalog.",
+            "resourceType": "mcpConnector",
+            "mcpServers": [
+                {
+                    "url": "*"
+                }
+            ],
+            "sectionCaption": "📤 Send results to your apps"
+        },
+        "mcpIssueTeam": {
+            "title": "Issue tracker team",
+            "type": "string",
+            "description": "Only when the connected app is an issue tracker: the team (name or ID) the summary issue is created under, if that app requires one.",
+            "editor": "textfield"
         }
     },
     "required": []

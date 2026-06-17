@@ -1,7 +1,8 @@
 import './diag-stream.js';
 import { Actor, log } from 'apify';
 import type { Input, NormalizedInput, OutputItem } from './types.js';
-import { DEFAULTS, COMPACT_FIELDS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS } from './constants.js';
+import { DEFAULTS, COMPACT_FIELDS, AGENCY_KEYWORDS, URL_TRACKING_PARAMS, SOURCE_NAME } from './constants.js';
+import { wireMcpExport } from './mcpWire.js';
 import { searchJobs, fetchJobDetail, fetchRelatedJobs, fetchCompanyInfo, companySlugFromUrl, type SearchParams, type CompanyInfo } from './apiClient.js';
 import type { ApiJob } from './apiClient.js';
 import { transformJob, mergeDetail, applyDescriptionMaxLength, inferCountryHintFromSearchLocation } from './transform.js';
@@ -528,6 +529,10 @@ async function main() {
 
   const scrapedAt = new Date().toISOString();
 
+  // Full emitted set (across both incremental + non-incremental branches), used by the
+  // opt-in MCP connector export after the run completes — independent of compact mode.
+  const pushedAll: OutputItem[] = [];
+
   try {
     const queries = buildQueries(input);
     log.info(`Running ${queries.length} ${queries.length === 1 ? 'query' : 'queries'}`);
@@ -801,6 +806,7 @@ async function main() {
         await Actor.pushData(applyFinalFilters(toPush as Record<string, unknown> | Record<string, unknown>[], input));
         try { await Actor.charge({ eventName: 'apify-default-dataset-item', count: toPush.length }); } catch {}
       }
+      pushedAll.push(...(toPush as unknown as OutputItem[]));
       await dispatchNotifications(input, toPush as unknown as OutputItem[], scrapedAt);
 
       const lockKey = lockKvKey(`${input.stateKey}__${queryFingerprint?.slice(0, 16) ?? ''}`);
@@ -839,6 +845,7 @@ async function main() {
       }
 
       log.info(`Done. Pushed ${toPush.length} items.`);
+      pushedAll.push(...(toPush as unknown as OutputItem[]));
       await dispatchNotifications(input, toPush as unknown as OutputItem[], scrapedAt);
       logRunFooter({
         actorSlug: 'blackfalcondata/linkedin-jobs-scraper',
@@ -854,10 +861,47 @@ async function main() {
     await releaseLock();
   }
 
+  await exportToConnectedApp(rawInput ?? {}, pushedAll);
+
   await emitTerminal({ type: 'run.complete', payload: { emitted: emittedCount, unchangedSkipped, totalReviews: emittedCount + unchangedSkipped, status: 'success', ok: true, durationMs: Date.now() - runStartTs } });
 
 
   await Actor.exit();
+}
+
+/**
+ * Opt-in MCP connector export — push the full emitted set into the user's connected app
+ * (Notion / Slack / Sheets / Linear). No-op without `appConnector`. Runs on the full pushed
+ * set (NOT the notify-filtered subset). Idempotent across resume via a KV marker. Never throws
+ * (wireMcpExport swallows every failure into a result) so a failing connector can't fail a run.
+ */
+async function exportToConnectedApp(input: Input, pushed: OutputItem[]): Promise<void> {
+  if (!input.appConnector || pushed.length === 0) return;
+  let alreadyExported = false;
+  try { alreadyExported = !!(await Actor.getValue('mcpExportDone')); } catch { /* best-effort */ }
+  if (alreadyExported) return;
+  const MCP_COLUMNS: Array<[string, string]> = [
+    ['Job id', 'jobId'], ['Linkedin job id', 'linkedinJobId'], ['Title', 'title'],
+    ['Company', 'company'], ['Company url', 'companyUrl'], ['Location', 'location'],
+    ['Country', 'country'], ['Posted at', 'postedAt'], ['Apply url', 'applyUrl'],
+    ['Apply type', 'applyType'], ['Workplace type', 'workplaceType'],
+    ['Salary min', 'salaryMin'],
+  ];
+  const res = await wireMcpExport({
+    records: pushed as unknown as Record<string, unknown>[],
+    connectorId: input.appConnector,
+    proxyUrl: process.env.APIFY_MCP_PROXY_URL,
+    token: process.env.APIFY_TOKEN,
+    clientName: SOURCE_NAME,
+    recordNoun: 'jobs',
+    columns: MCP_COLUMNS,
+    issueTeam: input.mcpIssueTeam,
+    maxRows: 500,
+    logger: log,
+  });
+  if (res.errors === 0 && res.exported > 0) {
+    try { await Actor.setValue('mcpExportDone', { at: new Date().toISOString() }); } catch { /* best-effort */ }
+  }
 }
 
 async function dispatchNotifications(input: NormalizedInput, pushed: OutputItem[], scrapedAt: string): Promise<void> {
