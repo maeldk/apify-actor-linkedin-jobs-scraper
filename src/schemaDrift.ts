@@ -1,17 +1,36 @@
 /**
- * schemaDrift v2 - source-agnostic detector for fields a data source emits that
+ * schemaDrift v2 — source-agnostic detector for fields a data source emits that
  * an actor does not yet map.
  *
  * Core principle (do NOT regress this): drift is measured against what the actor
  * MAPS, never against what the source has sent before. Seeding a baseline from
- * live responses and comparing against it would "learn errors as truth" - an
- * existing-but-unmapped field would be silently accepted. So:
+ * live responses and comparing against it would "learn errors as truth" — an
+ * existing-but-unmapped field (e.g. a salary range only present on some
+ * listings) would be silently accepted. So:
  *
- *   pendingDrift = observed - mappedKnown - acknowledgedIgnored
+ *   pendingDrift = observed − mappedKnown − acknowledgedIgnored
  *
  * `observedBaseline` is governance/history only (firstSeen/lastSeen/sampleCount,
  * "disappeared" detection). It NEVER suppresses pendingDrift: a new field keeps
- * reporting every run until it is mapped or explicitly acknowledged in code.
+ * reporting every run until it is mapped (added to mappedKnown) or explicitly
+ * acknowledged in code (added to acknowledgedIgnored). One missed alert must not
+ * lose the signal.
+ *
+ * Pure (no I/O): the actor loads the prior baseline from KV, passes it in, takes
+ * report().observedBaseline and persists it, and routes report() to its diag
+ * sink (operator-only). Code-ack keeps v2 small and git-reviewable; a KV/dashboard
+ * ack layer can be added later without changing this contract.
+ *
+ *   const watch = createSchemaWatcher({
+ *     actor: 'arbeitsagentur-jobs-feed',
+ *     mappedKnown: { searchJob: SEARCH_MAPPED, detailJob: DETAIL_MAPPED },
+ *     acknowledgedIgnored: { employer: ['showLinkout'] },
+ *     observedBaseline,                 // loaded from KV (or null on first run)
+ *   });
+ *   for (const j of serpItems) watch.observe('searchJob', j);
+ *   const report = watch.report();
+ *   await persistBaseline(report.observedBaseline);   // best-effort
+ *   if (watch.hasDrift()) emit({ type: 'info', detail: 'schema.drift', payload: report });
  */
 
 export const SCHEMA_DRIFT_MODULE_VERSION = '2.0.1';
@@ -42,21 +61,33 @@ export interface PendingField {
 }
 
 export interface SchemaDriftReport {
+    /** layer -> fields observed but neither mapped nor acknowledged. The signal. */
     pendingDrift: Record<string, PendingField[]>;
+    /** Updated snapshot for the actor to persist to KV. */
     observedBaseline: ObservedBaseline;
+    /** Echo of the in-code ack list, for transparency in the emitted report. */
     acknowledgedIgnored: Record<string, string[]>;
+    /** layer -> baseline fields not seen this run (low severity). */
     disappearedFields: Record<string, string[]>;
+    /** layer -> records observed this run. */
     sampled: Record<string, number>;
 }
 
 export interface SchemaWatcherOptions {
     actor: string;
+    /** layer -> source keys the actor actually consumes (the truth to measure against). */
     mappedKnown: Record<string, Iterable<string>>;
+    /** layer -> known-irrelevant live keys, explicitly silenced (git-reviewable). */
     acknowledgedIgnored?: Record<string, Iterable<string>>;
+    /** Prior baseline loaded from KV; null/undefined on first run. */
     observedBaseline?: ObservedBaseline | null;
+    /** Baseline scope discriminator (e.g. route/mode/source-version). Default 'default'. */
     scope?: string;
+    /** Also scan one level of nested object keys as "parent.child". Default false. */
     nested?: boolean;
+    /** Cap fields tracked per layer (default 500). */
     maxPerBucket?: number;
+    /** Injectable clock for deterministic tests. Default new Date().toISOString(). */
     now?: () => string;
 }
 
@@ -80,7 +111,15 @@ export function createSchemaWatcher(opts: SchemaWatcherOptions): SchemaWatcher {
     const acked = new Map<string, Set<string>>();
     for (const [layer, keys] of Object.entries(opts.acknowledgedIgnored ?? {})) acked.set(layer, new Set(keys));
 
+    // Working copy of the baseline. Reuse the loaded one only if it matches this
+    // module's baseline schema version; otherwise start fresh (migration reset).
     const layers = new Map<string, Map<string, BaselineField>>();
+    // Only adopt a prior baseline that matches THIS actor, scope, and baseline
+    // schema version — otherwise a reused or cross-scope KV key would corrupt
+    // governance (firstSeenAt history, disappearedFields). Bump
+    // SCHEMA_BASELINE_VERSION whenever the stored semantics change; moduleVersion
+    // is recorded for diagnostics but is not a reset trigger (so patch releases
+    // don't needlessly wipe field history).
     const prior = opts.observedBaseline;
     if (
         prior
@@ -156,10 +195,11 @@ export function createSchemaWatcher(opts: SchemaWatcherOptions): SchemaWatcher {
                 const gone: string[] = [];
                 const seen = seenThisRun.get(layer) ?? new Set<string>();
                 for (const [key, f] of fields) {
-                    const status = statusOf(layer, key);
+                    const status = statusOf(layer, key); // recompute against CURRENT mapped/acked
                     f.status = status;
                     outFields[key] = f;
                     if (!seen.has(key)) gone.push(key);
+                    // Report pending only for fields actually observed this run.
                     if (status === 'pending' && seen.has(key)) {
                         pend.push({ field: key, firstSeenAt: f.firstSeenAt, lastSeenAt: f.lastSeenAt, sampleCount: f.sampleCount });
                     }
