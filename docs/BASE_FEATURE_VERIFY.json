@@ -2,7 +2,7 @@
   "tool": "base-feature-verify",
   "version": "1.0",
   "actor": "blackfalcondata~linkedin-job-scraper",
-  "timestamp": "2026-06-18T05:06:53.673Z",
+  "timestamp": "2026-06-18T16:12:15.632Z",
   "pass": true,
   "probeFilter": "all",
   "probes": [
