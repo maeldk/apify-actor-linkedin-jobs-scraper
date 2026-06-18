@@ -13,3 +13,4 @@ crawlee_storage/
 _raw_banner.png
 .wrangler/
 _scratch/
+.playwright-mcp/
