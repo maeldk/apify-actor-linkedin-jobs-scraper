@@ -704,6 +704,7 @@ async function main() {
         if (!info) continue;
         const it = items[idx];
         it.companyDescription = info.description;
+        it.companySlogan = info.slogan;
         it.companyWebsite = info.website;
         it.companyEmployeeCount = info.employeeCount;
         it.companyLogo = info.logo;
@@ -961,7 +962,7 @@ function buildExpiredStub(
     workplaceType: null, applicantCount: null, easyApply: null,
     salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null,
     salarySource: null, salaryIsPredicted: null,
-    companyLogo: null, companyDescription: null, companyEmployeeCount: null,
+    companyLogo: null, companyDescription: null, companySlogan: null, companyEmployeeCount: null,
     companyWebsite: null, companyAddress: null,
     contactName: null,
     recruiterName: null, recruiterUrl: null, recruiterTitle: null,

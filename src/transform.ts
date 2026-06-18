@@ -1,6 +1,7 @@
 import type { OutputItem } from './types.js';
 import type { ApiJob } from './apiClient.js';
 import type { ParsedDetail } from './detailParser.js';
+import { detectWorkplaceTypeFromText } from './detailParser.js';
 import { SOURCE_NAME } from './constants.js';
 import { createHash } from 'node:crypto';
 import { extractPhones as extractPhonesLib, type PhoneExtractionMode } from './phoneExtractor.js';
@@ -404,7 +405,7 @@ export function mergeDetail(item: OutputItem, detail: ParsedDetail, phoneMode: P
     employmentType: detail.employmentType ?? item.employmentType,
     industry: detail.industry ?? item.industry,
     jobFunction: detail.jobFunction ?? item.jobFunction,
-    workplaceType: detail.workplaceType ?? item.workplaceType,
+    workplaceType: detail.workplaceType ?? item.workplaceType ?? detectWorkplaceTypeFromText(`${item.title ?? ''}\n${description ?? ''}`),
     applicantCount: detail.applicantCount ?? item.applicantCount,
     salaryMin: detail.salary?.min ?? item.salaryMin,
     salaryMax: detail.salary?.max ?? item.salaryMax,
@@ -502,6 +503,7 @@ export function transformJob(apiJob: ApiJob, scrapedAt: string, countryHint: str
 
     companyLogo: null,
     companyDescription: null,
+    companySlogan: null,
     companyEmployeeCount: null,
     companyWebsite: null,
     companyAddress: null,

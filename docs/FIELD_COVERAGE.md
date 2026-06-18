@@ -58,7 +58,7 @@ We map by H3 label text (not by index) to avoid misalignment.
 | `description__job-criteria-list > li` "Employment type" | `employmentType` | MAPPED |
 | `description__job-criteria-list > li` "Job function" | `jobFunction` | MAPPED |
 | `description__job-criteria-list > li` "Industries" | `industry` | MAPPED |
-| `(derived from criteria)` | `workplaceType` | MAPPED (onsite / remote / hybrid) |
+| `(derived from criteria, falling back to title + description text)` | `workplaceType` | MAPPED (onsite / remote / hybrid; guest criteria rarely carry it, so a conservative title/description heuristic fills the gap) |
 | `.num-applicants__caption` | `applicantCount` | MAPPED (numeric) |
 | `<time datetime>` (detail) | `postedRelative` | MAPPED (used to refresh `postedAt`) |
 | `(derived from `description` text)` | `extractedEmails` | MAPPED (regex pass on description) |
@@ -117,6 +117,7 @@ We map by H3 label text (not by index) to avoid misalignment.
 |---|---|
 | `companyLogo` | RESERVED: requires `/company/<slug>` fetch (planned for v1.5) |
 | `companyDescription` | RESERVED: same |
+| `companySlogan` | MAPPED: `slogan` from `/company/<slug>` Organization JSON-LD when present (best-effort; sparse) |
 | `companyEmployeeCount` | RESERVED: same |
 | `companyWebsite` | RESERVED: same |
 | `companyAddress` (`{street, city, region, postalCode, country}`) | RESERVED: same |

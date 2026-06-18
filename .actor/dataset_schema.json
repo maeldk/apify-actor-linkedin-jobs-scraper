@@ -26,7 +26,7 @@
                     "seniorityLevel", "employmentType", "industry", "jobFunction",
                     "workplaceType", "applicantCount", "easyApply",
                     "salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod", "salarySource", "salaryIsPredicted",
-                    "companyLogo", "companyDescription", "companyEmployeeCount", "companyWebsite", "companyAddress",
+                    "companyLogo", "companyDescription", "companySlogan", "companyEmployeeCount", "companyWebsite", "companyAddress",
                     "contactName", "recruiterName", "recruiterUrl", "recruiterTitle",
                     "contactEmail", "contactPhone",
                     "companyLinkedIn", "companySocialLinks", "applyEmail",

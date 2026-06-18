@@ -32,6 +32,12 @@ describe('inputNormalize', () => {
     expect(input.startUrls).toEqual(['https://www.linkedin.com/jobs/search/?keywords=foo']);
   });
 
+  it('defaults excludeEmptyFields to true (clean output) but honours an explicit false', () => {
+    expect(normalizeInput({ keywords: 'x' }).excludeEmptyFields).toBe(true);
+    expect(normalizeInput({ keywords: 'x', excludeEmptyFields: false }).excludeEmptyFields).toBe(false);
+    expect(normalizeInput({ keywords: 'x', excludeEmptyFields: true }).excludeEmptyFields).toBe(true);
+  });
+
   it('normalizes LinkedIn hosts to the subdomain expected by apiClient', () => {
     expect(normalizeLinkedinHost('www')).toBe('www');
     expect(normalizeLinkedinHost('linkedin.com')).toBe('www');

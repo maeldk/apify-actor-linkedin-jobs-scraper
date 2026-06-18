@@ -262,6 +262,15 @@ describe('parseCompanyJsonLd', () => {
     });
   });
 
+  it('extracts companySlogan when the Organization JSON-LD carries a slogan', () => {
+    const html = `<script type="application/ld+json">{"@type":"Organization","name":"Acme","slogan":"We build the future"}</script>`;
+    expect(parseCompanyJsonLd(html).slogan).toBe('We build the future');
+  });
+
+  it('leaves slogan null when none is present', () => {
+    expect(parseCompanyJsonLd(COMPANY_HTML).slogan).toBeNull();
+  });
+
   it('finds the Organization inside an @graph wrapper', () => {
     const html = `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},{"@type":"Organization","name":"Acme","sameAs":"https://acme.test"}]}</script>`;
     const c = parseCompanyJsonLd(html);

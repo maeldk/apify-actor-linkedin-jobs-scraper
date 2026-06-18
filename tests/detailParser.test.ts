@@ -1,5 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { parseDetail, extractSalaryFromText } from '../src/detailParser.js';
+import { parseDetail, extractSalaryFromText, detectWorkplaceTypeFromText } from '../src/detailParser.js';
+
+describe('detectWorkplaceTypeFromText', () => {
+  it('detects remote from free text / title', () => {
+    expect(detectWorkplaceTypeFromText('Senior Engineer — Remote')).toBe('remote');
+    expect(detectWorkplaceTypeFromText('This is a fully remote position')).toBe('remote');
+    expect(detectWorkplaceTypeFromText('Backend Engineer (Remote)')).toBe('remote');
+  });
+  it('detects hybrid and prioritizes it over a co-mentioned remote', () => {
+    expect(detectWorkplaceTypeFromText('Hybrid role')).toBe('hybrid');
+    expect(detectWorkplaceTypeFromText('Hybrid - partially remote, 2 days onsite')).toBe('hybrid');
+  });
+  it('detects onsite', () => {
+    expect(detectWorkplaceTypeFromText('On-site role in NYC')).toBe('onsite');
+    expect(detectWorkplaceTypeFromText('This is an in-office position')).toBe('onsite');
+  });
+  it('ignores negated remote and returns null without other signal', () => {
+    expect(detectWorkplaceTypeFromText('This role is not remote')).toBeNull();
+    expect(detectWorkplaceTypeFromText('Great culture and benefits')).toBeNull();
+    expect(detectWorkplaceTypeFromText(null)).toBeNull();
+  });
+});
 
 describe('extractSalaryFromText', () => {
   it('parses an annual range with /yr', () => {
@@ -114,6 +135,11 @@ describe('parseDetail', () => {
       </ul>
     `;
     expect(parseDetail(html).workplaceType).toBe('hybrid');
+  });
+
+  it('falls back to description text for workplace type when criteria lack it', () => {
+    const html = `<div class="show-more-less-html__markup"><p>This is a fully remote position based anywhere.</p></div><button class="show-more-less-html__button">See more</button>`;
+    expect(parseDetail(html).workplaceType).toBe('remote');
   });
 
   it('decodes HTML entities in criteria values', () => {

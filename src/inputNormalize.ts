@@ -129,7 +129,7 @@ export function normalizeInput(raw: Partial<Input>): NormalizedInput {
     compact: raw.compact ?? false,
     descriptionMaxLength: raw.descriptionMaxLength ?? 0,
     descriptionFormat: normalizeDescriptionFormat(raw.descriptionFormat),
-    excludeEmptyFields: raw.excludeEmptyFields ?? false,
+    excludeEmptyFields: raw.excludeEmptyFields ?? true,
     phoneExtractionMode: raw.phoneExtractionMode ?? 'strict',
     maxResults: raw.maxResults ?? DEFAULTS.maxResults,
   };

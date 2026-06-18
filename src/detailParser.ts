@@ -19,7 +19,7 @@ export interface ParsedDetail {
   industry: string | null;
   /** Numeric applicant count (e.g. "Over 200 applicants" → 200). */
   applicantCount: number | null;
-  /** Inferred from criteria — only "Remote" / "Hybrid" / "On-site" surface here. */
+  /** Inferred from criteria, falling back to description-text heuristics. */
   workplaceType: 'onsite' | 'remote' | 'hybrid' | null;
   /** ISO if datetime attribute present, otherwise the relative "9 hours ago" text. */
   postedRelative: string | null;
@@ -75,6 +75,22 @@ function detectWorkplaceType(criteria: Map<string, string>): 'onsite' | 'remote'
     if (lc.includes('hybrid')) return 'hybrid';
     if (lc.includes('on-site') || lc.includes('onsite')) return 'onsite';
   }
+  return null;
+}
+
+/**
+ * Best-effort workplace-type detection from free text (job title or description).
+ * LinkedIn's guest criteria list rarely carries workplace type, so the signal
+ * usually only appears in the title/body ("… — Remote", "Hybrid (3 days)",
+ * "On-site role"). Conservative: hybrid wins over a co-mentioned remote, and a
+ * negated "not remote" is ignored. Returns null when no clear signal is present.
+ */
+export function detectWorkplaceTypeFromText(text: string | null): 'onsite' | 'remote' | 'hybrid' | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (/\bhybrid\b/.test(t)) return 'hybrid';
+  if (/\bremote\b/.test(t) && !/\b(no|not|non|never|isn['’]?t|aren['’]?t|without)\b[\s\w]{0,12}\bremote\b/.test(t)) return 'remote';
+  if (/\bon[-\s]?site\b/.test(t) || /\bin[-\s]office\b/.test(t) || /\bwork from (the )?office\b/.test(t)) return 'onsite';
   return null;
 }
 
@@ -162,7 +178,7 @@ export function parseDetail(html: string): ParsedDetail {
     jobFunction: criteria.get('Job function') ?? null,
     industry: criteria.get('Industries') ?? null,
     applicantCount: parseApplicantCount(html),
-    workplaceType: detectWorkplaceType(criteria),
+    workplaceType: detectWorkplaceType(criteria) ?? detectWorkplaceTypeFromText(desc.text),
     postedRelative: parsePostedRelative(html),
     salary: extractSalaryFromText(desc.text),
   };

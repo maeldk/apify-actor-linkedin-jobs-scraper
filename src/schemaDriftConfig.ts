@@ -31,6 +31,7 @@ export const DRIFT_MAPPED: Record<string, string[]> = {
   companyInfo: [
     'name',
     'description',
+    'slogan',
     'website',
     'employeeCount',
     'logo',

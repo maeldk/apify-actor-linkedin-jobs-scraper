@@ -199,6 +199,7 @@ export interface OutputItem {
   // Company enrichment (v1.5)
   companyLogo: string | null;
   companyDescription: string | null;
+  companySlogan: string | null;
   companyEmployeeCount: number | null;
   companyWebsite: string | null;
   companyAddress: {

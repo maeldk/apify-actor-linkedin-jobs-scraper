@@ -239,6 +239,8 @@ export function detectParseDrift(html: string, parsedCount: number): boolean {
 export interface CompanyInfo {
   name: string | null;
   description: string | null;
+  /** Short company tagline/slogan when LinkedIn's Organization JSON-LD exposes one. */
+  slogan: string | null;
   website: string | null;
   employeeCount: number | null;
   logo: string | null;
@@ -275,7 +277,7 @@ function findOrganization(node: unknown): Record<string, unknown> | null {
  * JSON, not CSS classes). Returns all-null when no Organization node is present.
  */
 export function parseCompanyJsonLd(html: string): CompanyInfo {
-  const empty: CompanyInfo = { name: null, description: null, website: null, employeeCount: null, logo: null, address: null };
+  const empty: CompanyInfo = { name: null, description: null, slogan: null, website: null, employeeCount: null, logo: null, address: null };
   const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
   const re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
   let m: RegExpExecArray | null;
@@ -306,9 +308,11 @@ export function parseCompanyJsonLd(html: string): CompanyInfo {
     } : null;
 
     const desc = str(org['description']);
+    const slogan = str(org['slogan']);
     return {
       name: str(org['name']),
       description: desc ? decodeHtmlEntities(desc) : null,
+      slogan: slogan ? decodeHtmlEntities(slogan) : null,
       website: str(org['sameAs']),
       employeeCount,
       logo,
