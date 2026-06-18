@@ -121,7 +121,7 @@ We map by H3 label text (not by index) to avoid misalignment.
 | `companyEmployeeCount` | RESERVED: same |
 | `companyWebsite` | RESERVED: same |
 | `companyAddress` (`{street, city, region, postalCode, country}`) | RESERVED: same |
-| `recruiterName` / `recruiterUrl` / `recruiterTitle` | RESERVED: only visible to authenticated viewers |
+| `recruiterName` / `recruiterUrl` / `recruiterTitle` / `recruiterPhoto` | MAPPED: parsed from the public "Direct message the job poster" card (`message-the-recruiter`), present on ~27% of guest job pages when `enrichDetails` is on. `contactName` mirrors `recruiterName`. |
 
 ## Coverage Summary
 

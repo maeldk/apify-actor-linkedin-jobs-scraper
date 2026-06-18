@@ -215,6 +215,7 @@ export interface OutputItem {
   recruiterName: string | null;
   recruiterUrl: string | null;
   recruiterTitle: string | null;
+  recruiterPhoto: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
 

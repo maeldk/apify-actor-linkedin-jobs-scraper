@@ -81,6 +81,36 @@ const SAMPLE = `
 </body></html>
 `;
 
+const POSTER_SAMPLE = `
+<div class="message-the-recruiter">
+  <p>Direct message the job poster from Moffatt &amp; Nichol</p>
+  <div class="base-card base-main-card base-main-card--link">
+    <a class="base-card__full-link" href="https://www.linkedin.com/in/mariebest" data-tracking-control-name="public_jobs">
+      <span class="sr-only">Marie Best</span>
+    </a>
+    <img class="hue-web-entity__image" data-delayed-url="https://media.licdn.com/dms/image/v2/photo123/0/1517748773408" alt="Click here to view Marie Best’s profile">
+    <div class="base-main-card__info">
+      <h3 class="base-main-card__title base-main-card__title--link">Marie Best</h3>
+      <h4 class="base-main-card__subtitle">Senior Recruiter &amp; Wellness Ambassador at Moffatt &amp; Nichol</h4>
+    </div>
+  </div>
+</div>`;
+
+describe('parseDetail job poster', () => {
+  it('extracts name, title, url and photo from the message-the-recruiter block', () => {
+    const p = parseDetail(POSTER_SAMPLE).poster;
+    expect(p).not.toBeNull();
+    expect(p!.name).toBe('Marie Best');
+    expect(p!.title).toBe('Senior Recruiter & Wellness Ambassador at Moffatt & Nichol');
+    expect(p!.url).toBe('https://www.linkedin.com/in/mariebest');
+    expect(p!.photo).toContain('media.licdn.com');
+  });
+
+  it('returns null poster when no hiring-team block is present', () => {
+    expect(parseDetail('<html><body><div>no poster</div></body></html>').poster).toBeNull();
+  });
+});
+
 describe('parseDetail', () => {
   it('extracts all common detail fields', () => {
     const d = parseDetail(SAMPLE);

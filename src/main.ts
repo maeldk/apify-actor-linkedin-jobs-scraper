@@ -965,7 +965,7 @@ function buildExpiredStub(
     companyLogo: null, companyDescription: null, companySlogan: null, companyEmployeeCount: null,
     companyWebsite: null, companyAddress: null,
     contactName: null,
-    recruiterName: null, recruiterUrl: null, recruiterTitle: null,
+    recruiterName: null, recruiterUrl: null, recruiterTitle: null, recruiterPhoto: null,
     contactEmail: null, contactPhone: null,
     companyLinkedIn: null, companySocialLinks: null,
     applyEmail: null,

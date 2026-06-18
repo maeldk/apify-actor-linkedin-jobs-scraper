@@ -25,6 +25,8 @@ export interface ParsedDetail {
   postedRelative: string | null;
   /** Salary parsed from the description text (LinkedIn rarely exposes structured salary on guest pages). */
   salary: { min: number; max: number | null; currency: string; period: SalaryPeriod } | null;
+  /** The "message the job poster" recruiter, public on ~27% of guest job pages. null when absent. */
+  poster: { name: string | null; title: string | null; url: string | null; photo: string | null } | null;
 }
 
 function decodeHtmlEntities(s: string): string {
@@ -167,6 +169,33 @@ export function extractSalaryFromText(
   return null;
 }
 
+/**
+ * Parse the public "Direct message the job poster" recruiter card. LinkedIn
+ * exposes it on ~27% of guest job pages (when the poster enabled public
+ * visibility) inside `<div class="message-the-recruiter">`. Returns null when
+ * the block is absent.
+ */
+export function parseJobPoster(html: string): ParsedDetail['poster'] {
+  const start = html.indexOf('message-the-recruiter');
+  if (start < 0) return null;
+  const block = html.slice(start, start + 2500);
+  const url = /class="[^"]*base-card__full-link[^"]*"[^>]*href="([^"]+)"/.exec(block)?.[1] ?? null;
+  const name = /class="[^"]*base-main-card__title[^"]*"[^>]*>\s*([\s\S]*?)\s*<\/h3>/.exec(block)?.[1];
+  const title = /class="[^"]*base-main-card__subtitle[^"]*"[^>]*>\s*([\s\S]*?)\s*<\/h4>/.exec(block)?.[1];
+  const photoRaw = /<img[^>]*data-delayed-url="([^"]+)"/.exec(block)?.[1] ?? null;
+  // LinkedIn injects `<!---->` comments and nested tags inside the title/subtitle.
+  const clean = (s: string | undefined): string | null => {
+    if (!s) return null;
+    const stripped = decodeHtmlEntities(trimWhitespace(s.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '')));
+    return stripped || null;
+  };
+  const cleanName = clean(name);
+  const cleanTitle = clean(title);
+  const photo = photoRaw ? decodeHtmlEntities(photoRaw) : null;
+  if (!cleanName && !url) return null;
+  return { name: cleanName, title: cleanTitle, url, photo };
+}
+
 export function parseDetail(html: string): ParsedDetail {
   const criteria = parseCriteria(html);
   const desc = parseDescription(html);
@@ -181,5 +210,6 @@ export function parseDetail(html: string): ParsedDetail {
     workplaceType: detectWorkplaceType(criteria) ?? detectWorkplaceTypeFromText(desc.text),
     postedRelative: parsePostedRelative(html),
     salary: extractSalaryFromText(desc.text),
+    poster: parseJobPoster(html),
   };
 }

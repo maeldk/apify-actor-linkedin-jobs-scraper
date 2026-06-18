@@ -27,6 +27,7 @@ export const DRIFT_MAPPED: Record<string, string[]> = {
     'workplaceType',
     'postedRelative',
     'salary',
+    'poster',
   ],
   companyInfo: [
     'name',

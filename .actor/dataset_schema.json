@@ -27,7 +27,7 @@
                     "workplaceType", "applicantCount", "easyApply",
                     "salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod", "salarySource", "salaryIsPredicted",
                     "companyLogo", "companyDescription", "companySlogan", "companyEmployeeCount", "companyWebsite", "companyAddress",
-                    "contactName", "recruiterName", "recruiterUrl", "recruiterTitle",
+                    "contactName", "recruiterName", "recruiterUrl", "recruiterTitle", "recruiterPhoto",
                     "contactEmail", "contactPhone",
                     "companyLinkedIn", "companySocialLinks", "applyEmail",
                     "extractedEmails", "extractedPhones", "extractedUrls", "socialProfiles",
