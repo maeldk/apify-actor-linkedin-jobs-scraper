@@ -3,7 +3,12 @@
 
 LinkedIn Job Scraper extracts [linkedin.com](https://linkedin.com) job postings — full descriptions, salary, skills, apply URLs, AI-ready summaries, and employer details (company size, website, industry) — with no login or cookies, at $0.27 per 1,000 results. Run a one-off export, or enable incremental mode to skip already-seen jobs on recurring runs.
 
-**New to Apify?** [Sign up free](https://console.apify.com/sign-up?fpr=1h3gvi) and use the included $5 monthly platform credit to test this actor.
+## How to use this actor
+
+- 👉 **Register for a free Apify account** — no credit card required.
+- 🎉 Just click **[Sign up free on Apify →](https://console.apify.com/sign-up?fpr=1h3gvi&fp_sid=ctarich)** and complete a quick signup.
+- 💰 A free Apify account includes $5 in monthly credits — enough to test this actor.
+- ⏳ Scrape during the free trial, with no commitment or upfront payment required.
 
 ## Key features
 
@@ -243,7 +248,7 @@ Example setup: 250 results per run, daily polling (30 runs/month). Event-pricing
 
 Full re-scrape monthly cost at daily polling: $2.04. First month with incremental costs $0.18 / $0.38 / $0.67 for the 5% / 15% / 30% scenarios because the first run builds baseline state at full cost before incremental savings apply.
 
-<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-06-18T16:12:23.493Z","version":1} -->
+<!-- incremental-positioning-meta: {"pricingHash":"sha256:94910b7c97938932","computedAt":"2026-06-19T06:40:07.658Z","version":1} -->
 
 ## FAQ
 
@@ -288,7 +293,7 @@ If you have questions, need a feature, or found a bug, please [open an issue](ht
 
 ## Getting started with Apify
 
-New to Apify? [Create a free account with $5 credit](https://console.apify.com/sign-up?fpr=1h3gvi) — no credit card required.
+New to Apify? [Create a free account with $5 credit](https://console.apify.com/sign-up?fpr=1h3gvi&fp_sid=ctarich) — no credit card required.
 
 1. Sign up — $5 platform credit included
 2. Open this actor and configure your input
