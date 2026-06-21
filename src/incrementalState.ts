@@ -360,7 +360,13 @@ export function filterByEmissionPolicy(
 // ── KV store key helpers ─────────────────────────────────────────────────
 
 export function stateKvKey(stateKey: string, queryFingerprint: string): string {
-  return `state__${Buffer.from(stateKey, 'utf8').toString('base64url')}__${queryFingerprint}`;
+    const key = `state__${Buffer.from(stateKey, 'utf8').toString('base64url')}__${queryFingerprint}`;
+    // base64url + hex fingerprint are charset-safe, but a long stateKey inflates ~33%
+    // under base64url and overflows the 256-char KV key limit → save throws → silent
+    // dedup loss. Fall back to a fixed-length hash; deterministic across runs.
+    if (key.length <= 256) return key;
+    const digest = createHash('sha256').update(stateKey, 'utf8').digest('hex').slice(0, 40);
+    return `state__h${digest}__${queryFingerprint}`;
 }
 
 export function legacyStateKvKey(stateKey: string): string {

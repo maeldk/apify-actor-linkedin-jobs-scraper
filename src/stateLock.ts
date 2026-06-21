@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 /**
  * Soft lock for incremental stateKey to prevent concurrent run corruption.
  *
@@ -20,7 +21,14 @@ export interface StateLock {
 const LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 export function lockKvKey(stateKey: string): string {
-  return `state-lock_${stateKey}`;
+    const key = `state-lock_${stateKey}`;
+    // Apify KV keys must be <=256 chars AND match /^[a-zA-Z0-9!-_.'()]+$/, or the
+    // request throws AFTER results are pushed/billed → state never saves → silent
+    // dedup loss. Don't assume the caller sanitized stateKey: hash to a fixed-length,
+    // charset-safe (hex) key when the readable form is invalid. Deterministic across runs.
+    if (key.length <= 256 && /^[a-zA-Z0-9!\-_.'()]+$/.test(key)) return key;
+    const digest = createHash('sha256').update(stateKey, 'utf8').digest('hex').slice(0, 40);
+    return `state-lock_h${digest}`;
 }
 
 /**
