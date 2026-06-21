@@ -33,6 +33,64 @@
     "examples": [
         {
             "name": "Recent US software-engineer jobs",
+            "taskSlug": "linkedin-job-by-role",
+            "taskTitle": "LinkedIn Job Scraper Job Scraper by Role",
+            "taskDescription": "Scrape LinkedIn Job Scraper jobs by role or keyword — location, description and date. Structured JSON, ready to run.",
+            "input": {
+                "keywords": "software engineer",
+                "geoIds": [
+                    "103644278"
+                ],
+                "datePosted": "last24h",
+                "maxResults": 100
+            }
+        },
+        {
+            "name": "Nordic preset, all engineering roles",
+            "taskSlug": "linkedin-job-by-city",
+            "taskTitle": "LinkedIn Job Scraper Job Scraper by City",
+            "taskDescription": "Scrape LinkedIn Job Scraper jobs for any city or region — location, description and date. Structured, ready to run.",
+            "input": {
+                "keywords": "engineer",
+                "regionPresets": "nordic",
+                "datePosted": "last7d",
+                "maxResults": 200
+            }
+        },
+        {
+            "name": "Daily delta feed (incremental)",
+            "taskSlug": "linkedin-job-remote-jobs",
+            "taskTitle": "LinkedIn Job Scraper Remote Job Scraper",
+            "taskDescription": "Scrape remote LinkedIn Job Scraper jobs — location, description and date. Filter to work-from-home roles, structured JSON.",
+            "input": {
+                "keywords": "software engineer",
+                "geoIds": [
+                    "103644278"
+                ],
+                "datePosted": "last24h",
+                "maxResults": 500,
+                "incrementalMode": true,
+                "stateKey": "us-software-engineer-daily"
+            }
+        },
+        {
+            "name": "Remote roles globally with detail enrichment",
+            "taskSlug": "linkedin-job-new-jobs-monitor",
+            "taskTitle": "LinkedIn Job Scraper New Jobs Monitor",
+            "taskDescription": "Monitor new LinkedIn Job Scraper jobs — incremental runs return only fresh postings. location, description and date.",
+            "input": {
+                "keywords": "senior backend engineer",
+                "workType": [
+                    "remote"
+                ],
+                "datePosted": "last7d",
+                "enrichDetails": true,
+                "maxResults": 50,
+                "incrementalMode": true
+            }
+        },
+        {
+            "name": "Recent US software-engineer jobs",
             "input": {
                 "keywords": "software engineer",
                 "geoIds": [
