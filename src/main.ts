@@ -30,6 +30,7 @@ import { exitNoActionableInput } from './noActionableExit.js';
 import { applyDescriptionFormat, normalizeDescriptionFormat } from './descriptionFormat.js';
 import { maybeStripEmpty } from './emitFilter.js';
 import { classifyFallbackErrCode, type ErrCodeMap } from './errCodeClassifier.js';
+import { buildSuccessRunCompletePayload } from './runCompletePayload.js';
 import {
   createSchemaWatcher,
   type ObservedBaseline,
@@ -864,7 +865,7 @@ async function main() {
 
   await exportToConnectedApp(rawInput ?? {}, pushedAll);
 
-  await emitTerminal({ type: 'run.complete', payload: { emitted: emittedCount, unchangedSkipped, totalReviews: emittedCount + unchangedSkipped, status: 'success', ok: true, durationMs: Date.now() - runStartTs } });
+  await emitTerminal({ type: 'run.complete', payload: buildSuccessRunCompletePayload(emittedCount, unchangedSkipped, Date.now() - runStartTs) });
 
 
   await Actor.exit();
