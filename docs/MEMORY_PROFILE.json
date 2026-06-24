@@ -1,0 +1,60 @@
+{
+  "actor": "linkedin-job-scraper",
+  "date": "2026-06-24T19:37:10.255Z",
+  "commit": "0137e8e",
+  "source": "live-run-history",
+  "evidenceQuality": "historical-observed-memory-peak",
+  "safetyMargin": 1.25,
+  "currentMemoryMb": 256,
+  "liveActorId": "6CZd8aozMxYXzdKO0",
+  "observations": {
+    "sampledRuns": 25,
+    "terminalRuns": 25,
+    "succeededRuns": 24,
+    "statuses": {
+      "SUCCEEDED": 24,
+      "FAILED": 1
+    },
+    "latestRunStartedAt": "2026-06-24T10:01:10.805Z",
+    "sampleRunIds": [
+      "LCG0eZ1Ea4gr5yJ5f",
+      "gGkARc0wYTwBTRWiC",
+      "sgRWQirTnThVutAYh",
+      "b0jYrD6dAa3oBoSSY",
+      "o3BbX0yKKxBRl0Ca6",
+      "KDHT1tGwebjHF5FyW",
+      "XwwNOcKC09Nt0wZtU",
+      "5djSRcHhGpbgX9I3z",
+      "wDFJsz8p8dbRSZYv4",
+      "3QVDgYrQUHEFX4vKW"
+    ],
+    "memoryPeakMb": {
+      "count": 25,
+      "min": 50.977,
+      "max": 76.664,
+      "avg": 58.268,
+      "p50": 55.844,
+      "p95": 71.418
+    }
+  },
+  "tiers": [
+    {
+      "maxResults": null,
+      "peakMb": 76.664,
+      "safetyMb": 95.8,
+      "bucketMb": 256,
+      "source": "max observed memMaxBytes across sampled live runs"
+    }
+  ],
+  "result": {
+    "flat": true,
+    "expression": null,
+    "minMemoryMb": 256,
+    "maxMemoryMb": 256
+  },
+  "recommendation": {
+    "defaultRunOptionsMemoryMbytes": 256,
+    "controlledProfileRequired": true,
+    "note": "Backfilled from existing Apify run metadata. Run memory-profile.mjs for controlled maxResults-tier profiling before changing memory tiers."
+  }
+}

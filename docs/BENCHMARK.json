@@ -1,0 +1,56 @@
+{
+  "actor": "linkedin-job-scraper",
+  "date": "2026-06-24T19:37:10.163Z",
+  "commit": "0137e8e",
+  "source": "live-run-history",
+  "evidenceQuality": "historical-observed-not-controlled-concurrency-benchmark",
+  "liveActorId": "6CZd8aozMxYXzdKO0",
+  "liveRunWindow": {
+    "sampledRuns": 25,
+    "terminalRuns": 25,
+    "succeededRuns": 24,
+    "statuses": {
+      "SUCCEEDED": 24,
+      "FAILED": 1
+    },
+    "latestRunStartedAt": "2026-06-24T10:01:10.805Z",
+    "sampleRunIds": [
+      "LCG0eZ1Ea4gr5yJ5f",
+      "gGkARc0wYTwBTRWiC",
+      "sgRWQirTnThVutAYh",
+      "b0jYrD6dAa3oBoSSY",
+      "o3BbX0yKKxBRl0Ca6",
+      "KDHT1tGwebjHF5FyW",
+      "XwwNOcKC09Nt0wZtU",
+      "5djSRcHhGpbgX9I3z",
+      "wDFJsz8p8dbRSZYv4",
+      "3QVDgYrQUHEFX4vKW"
+    ]
+  },
+  "observed": {
+    "durationSeconds": {
+      "count": 25,
+      "min": 3,
+      "max": 48,
+      "avg": 14.08,
+      "p50": 10,
+      "p95": 44
+    },
+    "usageTotalUsd": {
+      "count": 25,
+      "min": 0,
+      "max": 0.001,
+      "avg": 0,
+      "p50": 0,
+      "p95": 0.001
+    }
+  },
+  "decision": {
+    "verdict": "LIVE_HISTORY_BASELINE",
+    "confidence": "historical-run-metadata",
+    "recommendedConcurrency": null,
+    "recommendedInterBatchDelayMs": null,
+    "recommendedMaxRetries": null,
+    "note": "Backfilled from existing Apify run metadata. Run benchmark-api.mjs or benchmark-crawler.mjs for controlled concurrency recommendations."
+  }
+}
