@@ -168,6 +168,15 @@ export function deadlineBufferMs(totalBudgetMs: number): number {
   return Math.max(20_000, Math.min(60_000, Math.floor(totalBudgetMs * 0.15)));
 }
 
+export function resolveDeadlineMs(runtimeEnv: Record<string, string | undefined>): number | null {
+  const raw = runtimeEnv.APIFY_TIMEOUT_AT
+    || runtimeEnv.ACTOR_TIMEOUT_AT
+    || runtimeEnv.APIFY_ACTOR_TIMEOUT_AT;
+  if (!raw) return null;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 /**
  * Decide whether a fired deadline guard reflects a genuine wedge (hung socket /
  * stalled promise) versus a run that simply ran out of its timeout. A wedge =
@@ -261,10 +270,8 @@ function emitDeadlineExit(elapsedMs: number, totalBudgetMs: number, idleMs: numb
  */
 function installDeadlineGuard(): void {
   try {
-    const iso = env.APIFY_ACTOR_TIMEOUT_AT || env.ACTOR_TIMEOUT_AT;
-    if (!iso) return;
-    const deadlineMs = Date.parse(iso);
-    if (Number.isNaN(deadlineMs)) return;
+    const deadlineMs = resolveDeadlineMs(env);
+    if (deadlineMs === null) return;
     const startTs = Date.now();
     const totalBudgetMs = deadlineMs - startTs;
     const fireInMs = deadlineMs - deadlineBufferMs(totalBudgetMs) - startTs;
