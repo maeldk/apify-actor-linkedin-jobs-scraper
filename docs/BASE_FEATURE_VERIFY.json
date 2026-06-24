@@ -2,7 +2,7 @@
   "tool": "base-feature-verify",
   "version": "1.0",
   "actor": "blackfalcondata~linkedin-job-scraper",
-  "timestamp": "2026-06-18T16:12:15.632Z",
+  "timestamp": "2026-06-24T09:55:41.533Z",
   "pass": true,
   "probeFilter": "all",
   "probes": [
@@ -10,7 +10,7 @@
       "probe": "basic",
       "pass": true,
       "skipped": false,
-      "detail": "5 items, no dupes, scrapedAt ✓, portalUrl ✓, maxResults ✓ (5/5)",
+      "detail": "5 items, no dupes, scrapedAt ✓, portalUrl/sourceUrl ✓, maxResults ✓ (5/5)",
       "warnings": []
     },
     {
