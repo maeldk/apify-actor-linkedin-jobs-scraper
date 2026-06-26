@@ -113,6 +113,8 @@ export interface TimedBatchOptions {
   concurrency: number;
   interBatchDelayMs?: number;
   maxRetries?: number;
+  /** Per-attempt timeout for processFn; 0/undefined keeps legacy unbounded behavior. */
+  itemTimeoutMs?: number;
   retryBackoffMs?: number;
   retryAfterCapMs?: number;
   onBatchComplete?: (stats: BatchStats<unknown>) => void;
@@ -149,6 +151,23 @@ function emptyBreakdown(): Record<FetchErrorClass, number> {
   return { rate_limit: 0, server_error: 0, timeout: 0, network: 0, parse_fail: 0, other: 0 };
 }
 
+function withItemTimeout<T>(promise: Promise<T>, timeoutMs: number | undefined, index: number, attempt: number): Promise<T> {
+  if (timeoutMs === undefined || timeoutMs <= 0) return promise;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`timedBatchProcess item ${index} attempt ${attempt} timed out after ${timeoutMs}ms`);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
 // ── Single item execution with retries ───────────────────────────────
 
 async function executeItem<TInput, TOutput>(
@@ -156,6 +175,7 @@ async function executeItem<TInput, TOutput>(
   index: number,
   processFn: TimedProcessFn<TInput, TOutput>,
   maxRetries: number,
+  itemTimeoutMs: number | undefined,
   retryBackoffMs: number,
   retryAfterCapMs: number,
 ): Promise<ItemOutcome<TOutput>> {
@@ -172,7 +192,7 @@ async function executeItem<TInput, TOutput>(
     };
 
     try {
-      const result = await processFn(item, index, timing);
+      const result = await withItemTimeout(processFn(item, index, timing), itemTimeoutMs, index, attempt);
       const pipelineEnd = performance.now();
       const pipelineMs = Math.round(pipelineEnd - pipelineStart);
       const fetchMs = fetchStartMs !== null
@@ -241,6 +261,7 @@ export async function timedBatchProcess<TInput, TOutput>(
   const concurrency = opts.concurrency;
   const interBatchDelayMs = opts.interBatchDelayMs ?? 0;
   const maxRetries = opts.maxRetries ?? 0;
+  const itemTimeoutMs = opts.itemTimeoutMs;
   const retryBackoffMs = opts.retryBackoffMs ?? 1000;
   const retryAfterCapMs = opts.retryAfterCapMs ?? 5000;
 
@@ -259,7 +280,7 @@ export async function timedBatchProcess<TInput, TOutput>(
     const batchStart = performance.now();
     const settled = await Promise.allSettled(
       batch.map((item, k) =>
-        executeItem(item, batchIndices[k], processFn, maxRetries, retryBackoffMs, retryAfterCapMs),
+        executeItem(item, batchIndices[k], processFn, maxRetries, itemTimeoutMs, retryBackoffMs, retryAfterCapMs),
       ),
     );
     const wallMs = Math.round(performance.now() - batchStart);
