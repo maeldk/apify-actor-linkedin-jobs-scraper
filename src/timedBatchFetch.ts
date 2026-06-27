@@ -109,11 +109,20 @@ export interface TimingHandle {
 
 // ── Options ──────────────────────────────────────────────────────────
 
+/**
+ * Default per-attempt timeout armed when a caller does not pass `itemTimeoutMs`.
+ * Prevents the fleet-wide 2h-stall class (one hung fetch wedging the batch's
+ * Promise.allSettled until the Apify 2h SIGKILL). Generous enough for slow
+ * detail pages / renders; callers needing the legacy unbounded behavior pass
+ * an explicit `itemTimeoutMs: 0`.
+ */
+export const DEFAULT_ITEM_TIMEOUT_MS = 180_000;
+
 export interface TimedBatchOptions {
   concurrency: number;
   interBatchDelayMs?: number;
   maxRetries?: number;
-  /** Per-attempt timeout for processFn; 0/undefined keeps legacy unbounded behavior. */
+  /** Per-attempt timeout for processFn; undefined arms DEFAULT_ITEM_TIMEOUT_MS, explicit 0 keeps legacy unbounded behavior. */
   itemTimeoutMs?: number;
   retryBackoffMs?: number;
   retryAfterCapMs?: number;
@@ -261,7 +270,13 @@ export async function timedBatchProcess<TInput, TOutput>(
   const concurrency = opts.concurrency;
   const interBatchDelayMs = opts.interBatchDelayMs ?? 0;
   const maxRetries = opts.maxRetries ?? 0;
-  const itemTimeoutMs = opts.itemTimeoutMs;
+  // Fleet-wide 2h-stall guard: a single hung fetch (e.g. a stalled res.text()
+  // body read after a one-shot AbortSignal already fired) makes the batch's
+  // Promise.allSettled wait forever, burning the run to the 2h platform SIGKILL
+  // with 0 results and no terminal event. Arm a sane per-attempt default so the
+  // batch always settles. Callers can override; explicit 0 keeps the legacy
+  // unbounded behavior as an escape hatch.
+  const itemTimeoutMs = opts.itemTimeoutMs === undefined ? DEFAULT_ITEM_TIMEOUT_MS : opts.itemTimeoutMs;
   const retryBackoffMs = opts.retryBackoffMs ?? 1000;
   const retryAfterCapMs = opts.retryAfterCapMs ?? 5000;
 
